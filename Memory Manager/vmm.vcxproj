@@ -30,7 +30,7 @@
     <ClCompile Include="source\vsimplelock.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="include\vmm.h" />
+    <ClInclude Include="include\Voltek.MemoryManager.h" />
     <ClInclude Include="include\vmmconfig.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="source\valloc.h" />
