@@ -202,4 +202,14 @@ namespace voltek
 	{
 		return Detours::X64::DetourVTable(target, detour, index);
 	}
+
+	VOLTEK_DETOURS_API uintptr_t detours_patch_iat(uintptr_t module, const char* import_module, const char* api, uintptr_t detour)
+	{
+		return Detours::IATHook(module, import_module, api, detour);
+	}
+
+	VOLTEK_DETOURS_API uintptr_t detours_patch_iat_delayed(uintptr_t module, const char* import_module, const char* api, uintptr_t detour)
+	{
+		return Detours::IATDelayedHook(module, import_module, api, detour);
+	}
 }

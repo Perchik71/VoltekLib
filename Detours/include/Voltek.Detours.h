@@ -30,7 +30,7 @@ namespace voltek
 	class protect_guard
 	{
 	public:
-		protect_guard(uintptr_t address, size_t size) : _begin(0), _size(0), _old_flags(0)
+		protect_guard(uintptr_t address, size_t size) noexcept : _begin(0), _size(0), _old_flags(0)
 		{
 			_old_flags = detours_unlock_protected(address, size);
 			if (_old_flags != 0)
@@ -40,7 +40,7 @@ namespace voltek
 			}
 		}
 
-		~protect_guard()
+		~protect_guard() noexcept
 		{
 			if (_old_flags)
 			{
@@ -78,4 +78,7 @@ namespace voltek
 	{
 		return detours_vtable(target, *(uintptr_t*)&detour, index);
 	}
+
+	VOLTEK_DETOURS_API uintptr_t detours_patch_iat(uintptr_t module, const char* import_module, const char* api, uintptr_t detour);
+	VOLTEK_DETOURS_API uintptr_t detours_patch_iat_delayed(uintptr_t module, const char* import_module, const char* api, uintptr_t detour);
 }
