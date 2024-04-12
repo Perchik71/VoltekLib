@@ -17,8 +17,8 @@ namespace voltek
 
 	VOLTEK_UP_API int64_t find_invalid_utf8_codepoint(const char* str, int64_t length, bool stop_on_non_utf8 = true);
 
-	VOLTEK_UP_API ansistring utf8_to_wincp(const utf8string& str);
-	VOLTEK_UP_API utf8string wincp_to_utf8(const ansistring& str);
-	VOLTEK_UP_API unicodestring utf8_to_utf16(const utf8string& str);
-	VOLTEK_UP_API utf8string utf16_to_utf8(const unicodestring& str);
+	VOLTEK_UP_API ansistring _utf8_to_wincp(const utf8string& str);
+	VOLTEK_UP_API utf8string _wincp_to_utf8(const ansistring& str);
+	VOLTEK_UP_API int utf8_to_wincp(const char* asource, char* adest, bool test_on_invalid = false);
+	VOLTEK_UP_API int wincp_to_utf8(const char* asource, char* adest);
 }

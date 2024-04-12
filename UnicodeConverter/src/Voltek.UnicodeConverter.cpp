@@ -8,6 +8,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <algorithm>
+
 namespace voltek
 {
 	VOLTEK_UP_API int64_t utf8_to_unicode(const char* src, size_t src_len, wchar_t* dst, size_t dst_len)
@@ -372,7 +374,7 @@ namespace voltek
 		return !str.empty() && (find_invalid_utf8_codepoint(str.c_str(), (int64_t)str.length()) == -1);
 	}
 
-	VOLTEK_UP_API ansistring utf8_to_wincp(const utf8string& str)
+	VOLTEK_UP_API ansistring _utf8_to_wincp(const utf8string& str)
 	{
 		if (is_ascii(str))
 			return str;
@@ -383,7 +385,7 @@ namespace voltek
 
 		ansistring ret;
 		auto len = WideCharToMultiByte(CP_ACP, 0, src.c_str(), (int)src.length(), nullptr, 0, nullptr, nullptr);
-		
+
 		if (len > 0)
 		{
 			ret.resize(len);
@@ -393,7 +395,7 @@ namespace voltek
 		return ret;
 	}
 
-	VOLTEK_UP_API utf8string wincp_to_utf8(const ansistring& str)
+	VOLTEK_UP_API utf8string _wincp_to_utf8(const ansistring& str)
 	{
 		if (is_ascii(str))
 			return str;
@@ -409,31 +411,26 @@ namespace voltek
 		return utf8encode(src);
 	}
 
-	VOLTEK_UP_API unicodestring utf8_to_utf16(const utf8string& str)
+	VOLTEK_UP_API int utf8_to_wincp(const char* asource, char* adest, bool test_on_invalid)
 	{
-		unicodestring src;
+		if (test_on_invalid && (find_invalid_utf8_codepoint(asource, strlen(asource)) != -1))
+			return -1;
 
-		auto len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0);
-		if (len <= 0)
-			return src;
-
-		src.resize(len);
-		MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.length(), src.data(), len);
-
-		return src;
+		auto ansi = _utf8_to_wincp(asource);
+		auto alen = ansi.length();
+		if (!alen) return 0;
+		if (!adest) return alen + 1;
+		else memcpy(adest, asource, alen);
+		return alen;
 	}
 
-	VOLTEK_UP_API utf8string utf16_to_utf8(const unicodestring& str)
+	VOLTEK_UP_API int wincp_to_utf8(const char* asource, char* adest)
 	{
-		ansistring ret;
-		auto len = WideCharToMultiByte(CP_UTF8, 0, str.c_str(), (int)str.length(), nullptr, 0, nullptr, nullptr);
-
-		if (len > 0)
-		{
-			ret.resize(len);
-			WideCharToMultiByte(CP_UTF8, 0, str.c_str(), (int)str.length(), ret.data(), len, nullptr, nullptr);
-		}
-
-		return ret;
+		auto utf8 = _wincp_to_utf8(asource);
+		auto alen = utf8.length();
+		if (!alen) return 0;
+		if (!adest) return alen + 1;
+		else memcpy(adest, asource, alen);
+		return alen;
 	}
 }
