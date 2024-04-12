@@ -286,84 +286,86 @@ namespace voltek
 
 	VOLTEK_UP_API int64_t find_invalid_utf8_codepoint(const char* str, int64_t length, bool stop_on_non_utf8)
 	{
-        // return -1 if ok
-        if (!str || !length)
-            return -1;
+		// return -1 if ok
+		if (!str || !length)
+			return -1;
 
-        int32_t charlen = 0;
-        int64_t result = 0;
-        while (result < length)
-        {
-            auto c = *str;
-            if (c < 0x80)
-                // regular single byte ASCII character
-                charlen = 1;
-            else if (c <= 0xC1)
-            {
-                // single byte character, between valid UTF-8 encodings
-                // 11000000 and 11000001 map 2 byte to 0..128, which is invalid and used for XSS attacks
-                if (stop_on_non_utf8 || (c >= 192))
-                    return result;
-                charlen = 1;
-            }
-            else if (c <= 0xDF)
-            {
-                // could be 2 byte character (%110xxxxx %10xxxxxx)
-                if ((result < (length - 1)) && ((str[1] & 0xC0) == 0x80))
-                    charlen = 2;
-                else
-                    // missing following bytes
-                    return result;
-            }
-            else if (c <= 0xEF)
-            {
-                // could be 3 byte character (%1110xxxx %10xxxxxx %10xxxxxx)
-                if ((result < (length - 2)) && ((str[1] & 0xC0) == 0x80) && ((str[2] & 0xC0) == 0x80))
-                {
-                    if ((c == 0xE0) && (str[1] <= 0x9F))
-                        // XSS attack: 3 bytes are mapped to the 1 or 2 byte codes
-                        return result;
-                    charlen = 3;
-                }
-                else
-                    // missing following bytes
-                    return result;
-            }
-            else if (c <= 0xF7)
-            {
-                // could be 4 byte character (%11110xxx %10xxxxxx %10xxxxxx %10xxxxxx)
-                if ((result < (length - 3)) && ((str[1] & 0xC0) == 0x80) && ((str[2] & 0xC0) == 0x80) && ((str[3] & 0xC0) == 0x80))
-                {
-                    if ((c == 0xF0) && (str[1] <= 0x8F))
-                        // XSS attack: 4 bytes are mapped to the 1-3 byte codes
-                        return result;
-                    
-                    if ((c > 0xF4) || ((c == 0xF4) && (str[1] > 0x8F)))
-                        // out of range U+10FFFF
-                        return result;
+		auto src = (const uint8_t*)(str);
+		int32_t charlen = 0;
+		int64_t result = 0;
 
-                    charlen = 4;
-                }
-                else
-                    // missing following bytes
-                    return result;
-            }
-            else if (stop_on_non_utf8)
-            {
-                return result;
-            }
-            else
-                charlen = 1;
+		while (result < length)
+		{
+			uint8_t c = *src;
+			if (c < 0x80)
+				// regular single byte ASCII character
+				charlen = 1;
+			else if (c <= 0xC1)
+			{
+				// single byte character, between valid UTF-8 encodings
+				// 11000000 and 11000001 map 2 byte to 0..128, which is invalid and used for XSS attacks
+				if (stop_on_non_utf8 || (c >= 192))
+					return result;
+				charlen = 1;
+			}
+			else if (c <= 0xDF)
+			{
+				// could be 2 byte character (%110xxxxx %10xxxxxx)
+				if ((result < (length - 1)) && ((src[1] & 0xC0) == 0x80))
+					charlen = 2;
+				else
+					// missing following bytes
+					return result;
+			}
+			else if (c <= 0xEF)
+			{
+				// could be 3 byte character (%1110xxxx %10xxxxxx %10xxxxxx)
+				if ((result < (length - 2)) && ((src[1] & 0xC0) == 0x80) && ((src[2] & 0xC0) == 0x80))
+				{
+					if ((c == 0xE0) && (src[1] <= 0x9F))
+						// XSS attack: 3 bytes are mapped to the 1 or 2 byte codes
+						return result;
+					charlen = 3;
+				}
+				else
+					// missing following bytes
+					return result;
+			}
+			else if (c <= 0xF7)
+			{
+				// could be 4 byte character (%11110xxx %10xxxxxx %10xxxxxx %10xxxxxx)
+				if ((result < (length - 3)) && ((src[1] & 0xC0) == 0x80) && ((src[2] & 0xC0) == 0x80) && ((src[3] & 0xC0) == 0x80))
+				{
+					if ((c == 0xF0) && (src[1] <= 0x8F))
+						// XSS attack: 4 bytes are mapped to the 1-3 byte codes
+						return result;
 
-            result += charlen;
-            str++;
+					if ((c > 0xF4) || ((c == 0xF4) && (src[1] > 0x8F)))
+						// out of range U+10FFFF
+						return result;
 
-            if (result > length)
-            {
-                // missing following bytes
-                result -= charlen;
-                return result;
-            }
+					charlen = 4;
+				}
+				else
+					// missing following bytes
+					return result;
+			}
+			else if (stop_on_non_utf8)
+			{
+				return result;
+			}
+			else
+				charlen = 1;
+
+			result += charlen;
+			src += charlen;
+
+			if (result > length)
+			{
+				// missing following bytes
+				result -= charlen;
+				return result;
+			}
         }
 
         return -1;
@@ -417,7 +419,7 @@ namespace voltek
 			return -1;
 
 		auto ansi = _utf8_to_wincp(asource);
-		auto alen = ansi.length();
+		int alen = (int)ansi.length();
 		if (!alen) return 0;
 		if (!adest) return alen + 1;
 		else memcpy(adest, ansi.c_str(), alen);
@@ -427,7 +429,7 @@ namespace voltek
 	VOLTEK_UP_API int wincp_to_utf8(const char* asource, char* adest)
 	{
 		auto utf8 = _wincp_to_utf8(asource);
-		auto alen = utf8.length();
+		int alen = (int)utf8.length();
 		if (!alen) return 0;
 		if (!adest) return alen + 1;
 		else memcpy(adest, utf8.c_str(), alen);
