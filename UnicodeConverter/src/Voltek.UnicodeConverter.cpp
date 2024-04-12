@@ -10,282 +10,279 @@
 
 namespace voltek
 {
-	namespace __internal
+	VOLTEK_UP_API int64_t utf8_to_unicode(const char* src, size_t src_len, wchar_t* dst, size_t dst_len)
 	{
-		int64_t utf8_to_unicode(const char* src, size_t src_len, wchar_t* dst, size_t dst_len)
+		if (!dst)
+			return -1;
+
+		const size_t UNICODE_INVALID = 63;
+
+		size_t out = 0, in = 0, char_len = 0, uc = 0;
+		uint8_t in_byte = 0, tmp_byte = 0;
+
+		if (dst)
 		{
-			if (!dst)
-				return -1;
-
-			const size_t UNICODE_INVALID = 63;
-
-			size_t out = 0, in = 0, char_len = 0, uc = 0;
-			uint8_t in_byte = 0, tmp_byte = 0;
-
-			if (dst)
+			do
 			{
-				do
+				in_byte = (uint8_t)src[in];
+				if (!(in_byte & 0x80))
 				{
-					in_byte = (uint8_t)src[in];
-					if (!(in_byte & 0x80))
+					dst[out] = (wchar_t)in_byte;
+					out++; in++;
+				}
+				else
+				{
+					tmp_byte = in_byte;
+					char_len = 0;
+					while (tmp_byte & 0x80)
 					{
-						dst[out] = (wchar_t)in_byte;
-						out++; in++;
+						tmp_byte = (((size_t)tmp_byte << 1)) & 0xFE;
+						char_len++;
 					}
-					else
+
+					if ((in + char_len - 1) > src_len)
+						// Insuficient chars in string to decode
+						// UTF-8 array. Fallback to single char.
+						char_len = 1;
+
+					for (size_t ahead = 1; ahead < char_len; ahead++)
 					{
-						tmp_byte = in_byte;
-						char_len = 0;
-						while (tmp_byte & 0x80)
+						if ((((uint8_t)(src[in + ahead]) & 0x80) == 0x80) ||
+							(((uint8_t)(src[in + ahead]) & 0x40) != 0))
 						{
-							tmp_byte = (((size_t)tmp_byte << 1)) & 0xFE;
-							char_len++;
+							// Invalid UTF-8 sequence, fallback.
+							char_len = ahead + 1;
+							break;
 						}
+					}
 
-						if ((in + char_len - 1) > src_len)
-							// Insuficient chars in string to decode
-							// UTF-8 array. Fallback to single char.
-							char_len = 1;
+					uc = 0xFFFF;
 
-						for (size_t ahead = 1; ahead < char_len; ahead++)
+					switch (char_len)
+					{
+					case 2:
+						uc = (size_t)((uint8_t)(src[in]) & 0x1F) << 6;
+						uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F);
+						if (uc < 0x80) uc = UNICODE_INVALID;
+						break;
+					case 3:
+						uc = (size_t)((uint8_t)(src[in]) & 0xF) << 12;
+						uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F) << 6;
+						uc |= (size_t)((uint8_t)(src[in + 2]) & 0x3F);
+						if ((uc <= 0x7FF) || (uc > 0xFFFD) || ((uc >= 0xD800) && (uc <= 0xDFFF)))
+							uc = UNICODE_INVALID;
+						break;
+					case 4:
+						uc = (size_t)((uint8_t)(src[in]) & 0x7) << 18;
+						uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F) << 12;
+						uc |= (size_t)((uint8_t)(src[in + 2]) & 0x3F) << 6;
+						uc |= (size_t)((uint8_t)(src[in + 3]) & 0x3F);
+
+						if ((uc < 0x10000) || (uc > 0x10FFFF)) uc = UNICODE_INVALID;
+						else
 						{
-							if ((((uint8_t)(src[in + ahead]) & 0x80) == 0x80) ||
-								(((uint8_t)(src[in + ahead]) & 0x40) != 0))
+							uc -= 0x10000;
+							if (out < dst_len)
 							{
-								// Invalid UTF-8 sequence, fallback.
-								char_len = ahead + 1;
-								break;
+								dst[out] = (wchar_t)((uc >> 10) + 0xD800);
+								uc = (uc & 0x3FF) + 0xDC00;
+								out++;
 							}
-						}
-
-						uc = 0xFFFF;
-
-						switch (char_len)
-						{
-						case 2:
-							uc = (size_t)((uint8_t)(src[in]) & 0x1F) << 6;
-							uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F);
-							if (uc < 0x80) uc = UNICODE_INVALID;
-							break;
-						case 3:
-							uc = (size_t)((uint8_t)(src[in]) & 0xF) << 12;
-							uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F) << 6;
-							uc |= (size_t)((uint8_t)(src[in + 2]) & 0x3F);
-							if ((uc <= 0x7FF) || (uc > 0xFFFD) || ((uc >= 0xD800) && (uc <= 0xDFFF)))
-								uc = UNICODE_INVALID;
-							break;
-						case 4:
-							uc = (size_t)((uint8_t)(src[in]) & 0x7) << 18;
-							uc |= (size_t)((uint8_t)(src[in + 1]) & 0x3F) << 12;
-							uc |= (size_t)((uint8_t)(src[in + 2]) & 0x3F) << 6;
-							uc |= (size_t)((uint8_t)(src[in + 3]) & 0x3F);
-
-							if ((uc < 0x10000) || (uc > 0x10FFFF)) uc = UNICODE_INVALID;
 							else
 							{
-								uc -= 0x10000;
-								if (out < dst_len)
-								{
-									dst[out] = (wchar_t)((uc >> 10) + 0xD800);
-									uc = (uc & 0x3FF) + 0xDC00;
-									out++;
-								}
-								else
-								{
-									in += char_len;
-									char_len = 0;
-								}
-							}
-							break;
-						default:
-							uc = UNICODE_INVALID;
-							break;
-						}
-
-						if (char_len)
-						{
-							dst[out] = (wchar_t)uc;
-							out++;
-						}
-
-						in += char_len;
-					}
-				} while ((out < dst_len) && (in < src_len));
-			}
-			else
-			{
-				do
-				{
-					if (!((uint8_t)src[in] & 0x80))
-					{
-						in++; out++;
-					}
-					else
-					{
-						tmp_byte = (uint8_t)src[in];
-						char_len = 0;
-						while (tmp_byte & 0x80)
-						{
-							tmp_byte = (((size_t)tmp_byte << 1)) & 0xFE;
-							char_len++;
-						}
-
-						if ((in + char_len - 1) > src_len)
-							// Insuficient chars in string to decode
-							// UTF-8 array. Fallback to single char.
-							char_len = 1;
-
-						for (size_t ahead = 1; ahead < char_len; ahead++)
-						{
-							if ((((uint8_t)(src[in + ahead]) & 0x80) == 0x80) ||
-								(((uint8_t)(src[in + ahead]) & 0x40) != 0))
-							{
-								// Invalid UTF-8 sequence, fallback.
-								char_len = ahead + 1;
-								break;
+								in += char_len;
+								char_len = 0;
 							}
 						}
-
-						if (char_len)
-							out++;
-
-						in += char_len;
+						break;
+					default:
+						uc = UNICODE_INVALID;
+						break;
 					}
-				} while (in < src_len);
-			}
 
-			return (int64_t)out + 1;
+					if (char_len)
+					{
+						dst[out] = (wchar_t)uc;
+						out++;
+					}
+
+					in += char_len;
+				}
+			} while ((out < dst_len) && (in < src_len));
 		}
-
-		unicodestring utf8decode(const utf8string& str)
+		else
 		{
-			unicodestring ret;
-
-			if (str.empty())
-				return ret;
-
-			ret.resize(str.length());
-			memset(ret.data(), 0, str.length());
-			auto len = utf8_to_unicode(str.c_str(), str.length() + 1, ret.data(), str.length());
-			if (len > 0) ret.resize(len - 1);
-
-			return ret;
-		}
-
-		int64_t unicode_to_utf8(const wchar_t* src, size_t src_len, char* dst, size_t dst_len)
-		{
-			int64_t result = 0;
-			if (!src || !src_len)
-				return result;
-
-			uint32_t lw = 0;
-			size_t i = 0, j = 0;
-			if (dst)
+			do
 			{
-				while ((i < src_len) && (j < dst_len))
+				if (!((uint8_t)src[in] & 0x80))
 				{
-					lw = src[i];
-
-					if (lw < 0x80)
+					in++; out++;
+				}
+				else
+				{
+					tmp_byte = (uint8_t)src[in];
+					char_len = 0;
+					while (tmp_byte & 0x80)
 					{
-						dst[j] = (char)lw;
-						j++;
+						tmp_byte = (((size_t)tmp_byte << 1)) & 0xFE;
+						char_len++;
 					}
-					else if (lw < 0x7FF)
-					{
-						if ((j + 1) >= dst_len)
-							break;
 
-						dst[j] = (char)(0xC0 | (lw >> 6));
-						dst[j + 1] = (char)(0x80 | (lw & 0x3F));
-						j += 2;
-					}
-					else if ((lw < 0xD7FF) && ((lw >= 0xE000) && (lw <= 0xFFFF)))
-					{
-						if ((j + 2) >= dst_len)
-							break;
+					if ((in + char_len - 1) > src_len)
+						// Insuficient chars in string to decode
+						// UTF-8 array. Fallback to single char.
+						char_len = 1;
 
-						dst[j] = (char)(0xE0 | (lw >> 12));
-						dst[j + 1] = (char)(0x80 | ((lw >> 6) & 0x3F));
-						dst[j + 2] = (char)(0x80 | (lw & 0x3F));
-						j += 3;
-					}
-					else if ((lw >= 0xD800) && (lw <= 0xDBFF))
+					for (size_t ahead = 1; ahead < char_len; ahead++)
 					{
-						if ((j + 3) >= dst_len)
-							break;
-
-						if (((j + 1) < src_len) && (src[i + 1] >= 0xDC00) && (src[i + 1] <= 0xDFFF))
+						if ((((uint8_t)(src[in + ahead]) & 0x80) == 0x80) ||
+							(((uint8_t)(src[in + ahead]) & 0x40) != 0))
 						{
-							lw = ((lw - 0xD7C0) << 10) + ((src[i + 1]) ^ 0xDC00);
-
-							dst[j] = (char)(0xF0 | (lw >> 18));
-							dst[j + 1] = (char)(0x80 | ((lw >> 12) & 0x3F));
-							dst[j + 2] = (char)(0x80 | ((lw >> 6) & 0x3F));
-							dst[j + 3] = (char)(0x80 | (lw & 0x3F));
-							j += 4;
-							i++;
+							// Invalid UTF-8 sequence, fallback.
+							char_len = ahead + 1;
+							break;
 						}
 					}
 
-					i++;
+					if (char_len)
+						out++;
+
+					in += char_len;
 				}
-			}
-			else
-			{
-				while ((i < src_len) && (j < dst_len))
-				{
-					lw = src[i];
-
-					if (lw < 0x80)
-						j++;
-					else if (lw < 0x7FF)
-						j += 2;
-					else if ((lw < 0xD7FF) && ((lw >= 0xE000) && (lw <= 0xFFFF)))
-						j += 3;
-					else if ((lw >= 0xD800) && (lw <= 0xDBFF))
-					{
-						if (((j + 1) < src_len) && (src[i + 1] >= 0xDC00) && (src[i + 1] <= 0xDFFF))
-						{
-							j += 4;
-							i++;
-						}
-					}
-
-					i++;
-				}
-			}
-
-			return j + 1;
+			} while (in < src_len);
 		}
 
-		utf8string utf8encode(const unicodestring& str)
-		{
-			utf8string result;
-
-			if (!str.empty())
-			{
-				result.resize(str.length() * 4);
-				auto i = unicode_to_utf8(str.c_str(), str.length(), result.data(), result.length());
-				if (i > 0)
-				{
-					result.resize(i - 1);
-					result.data()[result.length()] = 0;
-				}
-			}
-
-			return result;
-		}
+		return (int64_t)out + 1;
 	}
 
-	bool is_ascii(const rawbytestring& str)
+	unicodestring utf8decode(const utf8string& str)
+	{
+		unicodestring ret;
+
+		if (str.empty())
+			return ret;
+
+		ret.resize(str.length());
+		memset(ret.data(), 0, str.length());
+		auto len = utf8_to_unicode(str.c_str(), str.length() + 1, ret.data(), str.length());
+		if (len > 0) ret.resize(len - 1);
+
+		return ret;
+	}
+
+	VOLTEK_UP_API int64_t unicode_to_utf8(const wchar_t* src, size_t src_len, char* dst, size_t dst_len)
+	{
+		int64_t result = 0;
+		if (!src || !src_len)
+			return result;
+
+		uint32_t lw = 0;
+		size_t i = 0, j = 0;
+		if (dst)
+		{
+			while ((i < src_len) && (j < dst_len))
+			{
+				lw = src[i];
+
+				if (lw < 0x80)
+				{
+					dst[j] = (char)lw;
+					j++;
+				}
+				else if (lw < 0x7FF)
+				{
+					if ((j + 1) >= dst_len)
+						break;
+
+					dst[j] = (char)(0xC0 | (lw >> 6));
+					dst[j + 1] = (char)(0x80 | (lw & 0x3F));
+					j += 2;
+				}
+				else if ((lw < 0xD7FF) && ((lw >= 0xE000) && (lw <= 0xFFFF)))
+				{
+					if ((j + 2) >= dst_len)
+						break;
+
+					dst[j] = (char)(0xE0 | (lw >> 12));
+					dst[j + 1] = (char)(0x80 | ((lw >> 6) & 0x3F));
+					dst[j + 2] = (char)(0x80 | (lw & 0x3F));
+					j += 3;
+				}
+				else if ((lw >= 0xD800) && (lw <= 0xDBFF))
+				{
+					if ((j + 3) >= dst_len)
+						break;
+
+					if (((j + 1) < src_len) && (src[i + 1] >= 0xDC00) && (src[i + 1] <= 0xDFFF))
+					{
+						lw = ((lw - 0xD7C0) << 10) + ((src[i + 1]) ^ 0xDC00);
+
+						dst[j] = (char)(0xF0 | (lw >> 18));
+						dst[j + 1] = (char)(0x80 | ((lw >> 12) & 0x3F));
+						dst[j + 2] = (char)(0x80 | ((lw >> 6) & 0x3F));
+						dst[j + 3] = (char)(0x80 | (lw & 0x3F));
+						j += 4;
+						i++;
+					}
+				}
+
+				i++;
+			}
+		}
+		else
+		{
+			while ((i < src_len) && (j < dst_len))
+			{
+				lw = src[i];
+
+				if (lw < 0x80)
+					j++;
+				else if (lw < 0x7FF)
+					j += 2;
+				else if ((lw < 0xD7FF) && ((lw >= 0xE000) && (lw <= 0xFFFF)))
+					j += 3;
+				else if ((lw >= 0xD800) && (lw <= 0xDBFF))
+				{
+					if (((j + 1) < src_len) && (src[i + 1] >= 0xDC00) && (src[i + 1] <= 0xDFFF))
+					{
+						j += 4;
+						i++;
+					}
+				}
+
+				i++;
+			}
+		}
+
+		return j + 1;
+	}
+
+	utf8string utf8encode(const unicodestring& str)
+	{
+		utf8string result;
+
+		if (!str.empty())
+		{
+			result.resize(str.length() * 4);
+			auto i = unicode_to_utf8(str.c_str(), str.length(), result.data(), result.length());
+			if (i > 0)
+			{
+				result.resize(i - 1);
+				result.data()[result.length()] = 0;
+			}
+		}
+
+		return result;
+	}
+
+	VOLTEK_UP_API bool is_ascii(const rawbytestring& str)
 	{
 		for (size_t i = 0; i < str.length(); i++)
 			if (str[i] & 0x80) return false;
 		return true;
 	}
 
-	int64_t find_invalid_utf8_codepoint(const char* str, int64_t length, bool stop_on_non_utf8 = true)
+	VOLTEK_UP_API int64_t find_invalid_utf8_codepoint(const char* str, int64_t length, bool stop_on_non_utf8)
 	{
         // return -1 if ok
         if (!str || !length)
@@ -380,7 +377,7 @@ namespace voltek
 		if (is_ascii(str))
 			return str;
 
-		auto src = __internal::utf8decode(str);
+		auto src = utf8decode(str);
 		if (src.empty())
 			return str;
 
@@ -409,7 +406,7 @@ namespace voltek
 		src.resize(len);
 		MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, str.c_str(), (int)str.length(), src.data(), len);
 
-		return __internal::utf8encode(src);
+		return utf8encode(src);
 	}
 
 	VOLTEK_UP_API unicodestring utf8_to_utf16(const utf8string& str)
