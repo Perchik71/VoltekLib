@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="Detours\detours\Detours.cpp" />
+    <ClCompile Include="Detours\detours\Detours32.cpp" />
+    <ClCompile Include="Detours\detours\Detours64.cpp" />
+    <ClCompile Include="Detours\detours\HideStaticLibSymbols.c" />
+    <ClCompile Include="Detours\detours\stdafx.cpp" />
+    <ClCompile Include="Voltek.Detours.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Detours\detours\Detours.h" />
+    <ClInclude Include="Detours\detours\stdafx.h" />
+    <ClInclude Include="include\Voltek.Detours.h" />
+    <ClInclude Include="include\Voltek.Detours.Config.h" />
+  </ItemGroup>
+</Project>
