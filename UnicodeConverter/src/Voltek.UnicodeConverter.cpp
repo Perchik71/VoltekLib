@@ -420,7 +420,7 @@ namespace voltek
 		auto alen = ansi.length();
 		if (!alen) return 0;
 		if (!adest) return alen + 1;
-		else memcpy(adest, asource, alen);
+		else memcpy(adest, ansi.c_str(), alen);
 		return alen;
 	}
 
@@ -430,7 +430,7 @@ namespace voltek
 		auto alen = utf8.length();
 		if (!alen) return 0;
 		if (!adest) return alen + 1;
-		else memcpy(adest, asource, alen);
+		else memcpy(adest, utf8.c_str(), alen);
 		return alen;
 	}
 }
