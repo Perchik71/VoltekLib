@@ -14,5 +14,9 @@
     <ClInclude Include="Detours\detours\stdafx.h" />
     <ClInclude Include="include\Voltek.Detours.h" />
     <ClInclude Include="include\Voltek.Detours.Config.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="resource.rc" />
   </ItemGroup>
 </Project>
