@@ -36,6 +36,8 @@ namespace voltek
 
 	VOLTEK_RELDB_API bool load_reldb_item_stream(read_reldb_item_stream* stream);
 	VOLTEK_RELDB_API bool save_reldb_item_stream(read_reldb_item_stream* stream);
+	VOLTEK_RELDB_API bool load_reldb_item_stream_dev(read_reldb_item_stream* stream);
+	VOLTEK_RELDB_API bool save_reldb_item_stream_dev(read_reldb_item_stream* stream);
 
 	struct read_reldb_stream
 	{

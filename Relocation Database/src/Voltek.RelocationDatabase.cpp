@@ -12,6 +12,8 @@
 #include <string.h>
 #include <stdarg.h>
 #include <string>
+#include <memory>
+#include <vector>
 
 namespace voltek
 {
@@ -29,6 +31,8 @@ namespace voltek
 	constexpr static const char* MESSAGE_FAILED_READ = "[EEROR] RelocationDatabaseItem: The end of the file was reached unexpectedly";
 	constexpr static const char* MESSAGE_FAILED_WRITE = "[EEROR] RelocationDatabaseItem: Failed to write to a file";
 
+	constexpr static const char* EXTENDED_FORMAT = "extended";
+
 	struct reldb_chunk
 	{
 		uint32_t u32Id;
@@ -42,6 +46,11 @@ namespace voltek
 		if (handler) handler(msg);
 	}
 
+	void _MESSAGE_VA(reldb_stream_msg_event handler, const char* fmt, ...)
+	{
+		if (handler) handler(fmt);
+	}
+
 	static const char* whitespaceDelimiters = " \t\n\r\f\v";
 
 	inline std::string& Trim(std::string& str)
@@ -50,6 +59,12 @@ namespace voltek
 		str.erase(0, str.find_first_not_of(whitespaceDelimiters));
 
 		return str;
+	}
+
+	inline std::string Trim(const char* s)
+	{
+		std::string str(s);
+		return Trim(str);
 	}
 
 	template<typename T>
@@ -373,6 +388,139 @@ namespace voltek
 		}
 
 		fseek(stream->stream, pos_end, SEEK_SET);
+
+		return true;
+	}
+
+	VOLTEK_RELDB_API bool load_reldb_item_stream_dev(read_reldb_item_stream* stream)
+	{
+		if (!stream || !stream->stream || !stream->allocate_handler || !stream->deallocate_handler)
+			return false;
+		
+		auto Buffer = std::make_unique<char[]>(1024);
+		if (!FileGetString(Buffer.get(), 1024, stream->stream))
+		{
+			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+			return false;
+		}
+
+		auto _name = Trim(Buffer.get());
+		strcpy_s(stream->name, _name.c_str());
+		_MESSAGE_VA(stream->msg_handler, "\tThe patch name: \"%s\"", stream->name);
+
+		if (!FileGetString(Buffer.get(), 1024, stream->stream))
+		{
+			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+			return false;
+		}
+
+		char* EndPtr = nullptr;
+		stream->version = strtoul(Buffer.get(), &EndPtr, 10);
+		_MESSAGE_VA(stream->msg_handler, "\tThe patch version: %u", stream->version);
+
+		auto pos_safe = ftell(stream->stream);
+		if (!FileGetString(Buffer.get(), 1024, stream->stream))
+		{
+			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+			return false;
+		}
+
+		std::vector<reldb_signature> sings;
+
+		if (!_stricmp(Trim(Buffer.get()).c_str(), EXTENDED_FORMAT))
+		{
+			_MESSAGE_VA(stream->msg_handler, "\tExtended format");
+
+			uint32_t rva;
+			auto pattern = std::make_unique<char[]>(256);
+			uint32_t pattern_len;
+
+			while (!feof(stream->stream))
+			{
+				if (!FileGetString(Buffer.get(), 1024, stream->stream))
+				{
+					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+					return false;
+				}
+
+				auto Row = Trim(Buffer.get());
+				if (!Row.empty() && (sscanf(Row.c_str(), "%X %u %s", &rva, &pattern_len, pattern.get()) == 3))
+				{
+					reldb_signature s;
+					memset(&s, 0, sizeof(reldb_signature));
+
+					s.rva = rva;
+					s.pattern_len = (uint32_t)strlen(pattern.get());
+					if (s.pattern_len)
+					{
+						s.pattern = (char*)stream->allocate_handler((size_t)s.pattern_len + 1);
+						if (!s.pattern)
+						{
+							_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+
+							stream->deallocate_handler(stream->signs);
+							stream->signs = nullptr;
+
+							return false;
+						}
+
+						strcpy(s.pattern, pattern.get());
+						s.pattern[s.pattern_len] = 0;
+					}
+					else
+						s.pattern = nullptr;
+
+					sings.push_back(s);
+				}
+			}
+		}
+		else
+		{
+			std::vector<reldb_signature> sings;
+
+			fseek(stream->stream, pos_safe, SEEK_SET);
+			uint32_t rva;
+			while (!feof(stream->stream))
+			{
+				if (fscanf(stream->stream, "%X", &rva) == 1)
+				{
+					reldb_signature s;
+					memset(&s, 0, sizeof(reldb_signature));
+
+					s.rva = rva;
+					sings.push_back(s);
+				}
+			}
+		}
+
+		stream->sign_total = sings.size();
+		stream->signs = (reldb_signature*)stream->allocate_handler((size_t)stream->sign_total * sizeof(reldb_signature));
+		if (!stream->signs)
+		{
+			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+			return false;
+		}
+
+		memcpy(stream->signs, sings.data(), (size_t)stream->sign_total * sizeof(reldb_signature));
+
+		return true;
+	}
+
+	VOLTEK_RELDB_API bool save_reldb_item_stream_dev(read_reldb_item_stream* stream)
+	{
+		if (!stream || !stream->stream)
+			return false;
+
+		// Запись имени патча
+		fputs(stream->name, stream->stream);
+		fputc('\n', stream->stream);
+		// Запись версии патча
+		fprintf(stream->stream, "%u\n", stream->version);
+		// Расширенный формат
+		fputs(EXTENDED_FORMAT, stream->stream);
+		// Запись данных
+		for (uint32_t i = 0; i < stream->sign_total; i++)
+			fprintf(stream->stream, "%X %u %s\n", stream->signs[i].rva, stream->signs[i].pattern_len, stream->signs[i].pattern);
 
 		return true;
 	}
