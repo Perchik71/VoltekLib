@@ -8,12 +8,37 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <mmsystem.h>
-#include <string.h>
-#include <stdarg.h>
 #include <string>
 #include <memory>
 #include <vector>
+#include <map>
+
+#include <io.h>
+#include <errno.h>
+#include <string.h>
+#include <mmsystem.h>
+
+#define NO_ERR 0
+#define ERR_NO_STREAM -1
+#define ERR_INCORRECT_FNAME -2
+#define ERR_NOACCESS_FILE -3
+#define ERR_STDIO_FAILED -4
+#define ERR_OUT_OF_MEMORY -5
+
+#define ERR_FILE_NO_DATABASE -6
+#define ERR_DATABASE_VERSION_NO_SUPPORTED -7
+#define ERR_DATABASE_NO_INFO -8
+#define ERR_INCORRECT_CHUNK_SIZE -9
+#define ERR_FILE_ID_CORRUPTED -10
+#define ERR_PATCH_NO_INFO -11
+
+#define ERR_INDEX_OUT_OF_RANGE -12
+#define ERR_INVALID_ARGUMENTS -13
+#define ERR_NO_FOUND -14
+#define ERR_PATCH_NAME_ALREADY_EXISTS -15
+#define ERR_RVA_IN_PATCH_ALREADY_EXISTS -16
+
+#pragma pack(push, 1)
 
 namespace voltek
 {
@@ -26,11 +51,6 @@ namespace voltek
 	constexpr static uint32_t RELOCATION_DB_ITEM_DATA_CHUNK_ID = MAKEFOURCC('R', 'L', 'B', 'D');
 	constexpr static uint32_t RELOCATION_DB_ITEM_DATA_CHUNK_VERSION = 2;
 
-	constexpr static const char* MESSAGE_FAILED_READ2 = "[EEROR] RelocationDatabase: The end of the file was reached unexpectedly";
-	constexpr static const char* MESSAGE_FAILED_WRITE2 = "[EEROR] RelocationDatabase: Failed to write to a file";
-	constexpr static const char* MESSAGE_FAILED_READ = "[EEROR] RelocationDatabaseItem: The end of the file was reached unexpectedly";
-	constexpr static const char* MESSAGE_FAILED_WRITE = "[EEROR] RelocationDatabaseItem: Failed to write to a file";
-
 	constexpr static const char* EXTENDED_FORMAT = "extended";
 
 	struct reldb_chunk
@@ -41,19 +61,32 @@ namespace voltek
 		uint32_t u32Reserved;
 	};
 
-	void _MESSAGE(reldb_stream_msg_event handler, const char* msg)
+	struct reldb_signature
 	{
-		if (handler) handler(msg);
-	}
+		uint32_t rva;
+		std::string pattern;
+	};
 
-	void _MESSAGE_VA(reldb_stream_msg_event handler, const char* fmt, ...)
+	struct reldb_patch
 	{
-		if (handler) handler(fmt);
-	}
+		uint32_t version;
+		char name[60];
+		std::vector<reldb_signature> signs;
+		bool has_shared;
+	};
+
+	struct reldb_stream
+	{
+		FILE* stream;
+		std::string fname;
+		reldb_allocate_func allocate_func;
+		reldb_deallocate_func deallocate_func;
+		std::map<std::string, std::shared_ptr<reldb_patch>> patches;
+	};
 
 	static const char* whitespaceDelimiters = " \t\n\r\f\v";
 
-	inline std::string& Trim(std::string& str)
+	std::string& Trim(std::string& str)
 	{
 		str.erase(str.find_last_not_of(whitespaceDelimiters) + 1);
 		str.erase(0, str.find_first_not_of(whitespaceDelimiters));
@@ -61,37 +94,35 @@ namespace voltek
 		return str;
 	}
 
-	inline std::string Trim(const char* s)
+	std::string Trim(const char* s)
 	{
 		std::string str(s);
 		return Trim(str);
 	}
 
 	template<typename T>
-	inline bool FileReadBuffer(FILE* fileStream, T* nValue, uint32_t nCount = 1)
+	bool FileReadBuffer(FILE* fileStream, T* nValue, uint32_t nCount = 1)
 	{
 		return fread(nValue, sizeof(T), nCount, fileStream) == nCount;
 	}
 
 	template<typename T>
-	inline bool FileWriteBuffer(FILE* fileStream, T nValue, uint32_t nCount = 1)
+	bool FileWriteBuffer(FILE* fileStream, T nValue, uint32_t nCount = 1)
 	{
 		return fwrite(&nValue, sizeof(T), nCount, fileStream) == nCount;
 	}
 
-	inline bool FileReadString(FILE* fileStream, std::string& sStr)
+	bool FileReadString(FILE* fileStream, std::string& sStr)
 	{
 		uint16_t nLen = 0;
 		if (fread(&nLen, sizeof(uint16_t), 1, fileStream) != 1)
 			return false;
 
-		sStr.resize((size_t)nLen + 1);
-		sStr[nLen] = '\0';
-
+		sStr.resize((size_t)nLen);
 		return fread(sStr.data(), 1, nLen, fileStream) == nLen;
 	}
 
-	inline bool FileWriteString(FILE* fileStream, const std::string& sStr)
+	bool FileWriteString(FILE* fileStream, const std::string& sStr)
 	{
 		uint16_t nLen = (uint16_t)sStr.length();
 		if (fwrite(&nLen, sizeof(uint16_t), 1, fileStream) != 1)
@@ -100,7 +131,7 @@ namespace voltek
 		return fwrite(sStr.c_str(), 1, nLen, fileStream) == nLen;
 	}
 
-	inline bool FileGetString(char* buffer, size_t bufferMaxSize, FILE* fileStream)
+	bool FileGetString(char* buffer, size_t bufferMaxSize, FILE* fileStream)
 	{
 		if (!fgets(buffer, (int)bufferMaxSize, fileStream))
 			return false;
@@ -109,185 +140,127 @@ namespace voltek
 		return true;
 	}
 
-	VOLTEK_RELDB_API bool load_reldb_item_stream(read_reldb_item_stream* stream)
+	class file_unique
 	{
-		if (!stream || !stream->stream || !stream->allocate_handler || !stream->deallocate_handler)
-			return false;
+	public:
+		file_unique(reldb_stream* _stm) : stm(_stm) {}
+		~file_unique()
+		{
+			if (stm->stream)
+			{
+				fflush(stm->stream);
+				fclose(stm->stream);
+				stm->stream = nullptr;
+			}
+		}
+	private:
+		reldb_stream* stm;
+	};
 
+	long __stdcall reldb_patch_open_stream(reldb_stream* stm, std::shared_ptr<reldb_patch>& patch)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+		
 		reldb_chunk Chunk;
 		memset(&Chunk, 0, sizeof(reldb_chunk));
 
-		if (!FileReadBuffer(stream->stream, &Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
+		if (!FileReadBuffer(stm->stream, &Chunk))
+			return ERR_STDIO_FAILED;
 
 		if (Chunk.u32Id != RELOCATION_DB_ITEM_CHUNK_ID)
-		{
-			_MESSAGE(stream->msg_handler, "[EEROR] RelocationDatabaseItem: This is not patch");
-			return false;
-		}
+			return ERR_FILE_ID_CORRUPTED;
 
 		if (Chunk.u32Version != RELOCATION_DB_ITEM_CHUNK_VERSION)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabaseItem: The patch version is not supported, please update the platform");
-			return false;
-		}
+			return ERR_DATABASE_VERSION_NO_SUPPORTED;
 
 		if (!Chunk.u32Size)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabaseItem: There is no patch data");
-			return false;
-		}
+			return ERR_PATCH_NO_INFO;
 
 		// Версия патча
-		if (!FileReadBuffer(stream->stream, &(stream->version)))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
+		if (!FileReadBuffer(stm->stream, &(patch->version)))
+			return ERR_STDIO_FAILED;
 
 		std::string _name;
 
 		// Имя патча
-		if (!FileReadString(stream->stream, _name))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
+		if (!FileReadString(stm->stream, _name))
+			return ERR_STDIO_FAILED;
 
 		_name = Trim(_name);
-		strncpy_s(stream->name, _name.c_str(), _name.length());
+		strncpy_s(patch->name, _name.c_str(), _name.length());
 		
-		if (!FileReadBuffer(stream->stream, &Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
+		if (!FileReadBuffer(stm->stream, &Chunk))
+			return ERR_STDIO_FAILED;
 
 		if (Chunk.u32Id != RELOCATION_DB_ITEM_DATA_CHUNK_ID)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabaseItem: This is not patch data");
-			return false;
-		}
+			return ERR_PATCH_NO_INFO;
 
 		// Чтение данных
 
 		if (Chunk.u32Version == 1)
 		{
 			auto Count = Chunk.u32Size >> 2;
-			auto Pattern = (uint32_t*)stream->allocate_handler(Count * sizeof(uint32_t));
-			stream->signs = (reldb_signature*)stream->allocate_handler(Count * sizeof(reldb_signature));
+			auto Pattern = (uint32_t*)stm->allocate_func(Count * sizeof(uint32_t));
+			patch->signs.resize(Count);
 
-			if (!Pattern || !stream->signs)
+			if (!Pattern)
 			{
-				if (Pattern) stream->deallocate_handler(Pattern);
-				if (stream->signs) stream->deallocate_handler(stream->signs);
-
-				stream->signs = nullptr;
-
-				_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-				return false;
+				patch->signs.clear();
+				return ERR_OUT_OF_MEMORY;
 			}
 
-			memset(stream->signs, 0, Count * sizeof(reldb_signature));
-
-			if (!FileReadBuffer(stream->stream, Pattern, Count))
+			if (!FileReadBuffer(stm->stream, Pattern, Count))
 			{
-				_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+				stm->deallocate_func(Pattern);
+				patch->signs.clear();
 
-				stream->deallocate_handler(stream->signs);
-				stream->signs = nullptr;
-
-				return false;
+				return ERR_STDIO_FAILED;
 			}
 
 			for (uint32_t i = 0; i < Count; i++)
-				stream->signs[i].rva = Pattern[i];
+				patch->signs[i].rva = Pattern[i];
+
+			stm->deallocate_func(Pattern);
 		}
 		else if (Chunk.u32Version != RELOCATION_DB_ITEM_DATA_CHUNK_VERSION)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabaseItem: The patch data version is not supported, please update the platform");
-			return false;
-		}
+			return ERR_DATABASE_VERSION_NO_SUPPORTED;
 		else
 		{
 			uint32_t Count;
-			if (!FileReadBuffer(stream->stream, &Count))
-			{
-				_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-				return false;
-			}
+			if (!FileReadBuffer(stm->stream, &Count))
+				return ERR_STDIO_FAILED;
 
 			if (!Count)
 				return true;
 
-			stream->signs = (reldb_signature*)stream->allocate_handler(Count * sizeof(reldb_signature));
-			if (!stream->signs)
-			{
-				_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-				return false;
-			}
-
-			memset(stream->signs, 0, Count * sizeof(reldb_signature));
-
-			uint32_t rva;
-			std::string pattern;
+			patch->signs.resize(Count);
 
 			for (uint32_t i = 0; i < Count; i++)
 			{
-				if (!FileReadBuffer(stream->stream, &rva))
+				if (!FileReadBuffer(stm->stream, &(patch->signs[i].rva)))
 				{
-					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-
-					stream->deallocate_handler(stream->signs);
-					stream->signs = nullptr;
-
-					return false;
+					patch->signs.clear();
+					return ERR_STDIO_FAILED;
 				}
 
-				if (!FileReadString(stream->stream, pattern))
+				if (!FileReadString(stm->stream, patch->signs[i].pattern))
 				{
-					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-
-					stream->deallocate_handler(stream->signs);
-					stream->signs = nullptr;
-
-					return false;
-				}
-
-				stream->signs[i].rva = rva;
-				stream->signs[i].pattern_len = (uint32_t)pattern.length();
-
-				if (stream->signs[i].pattern_len)
-				{
-					stream->signs[i].pattern = (char*)stream->allocate_handler((size_t)stream->signs[i].pattern_len + 1);
-					if (!stream->signs[i].pattern)
-					{
-						_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-
-						stream->deallocate_handler(stream->signs);
-						stream->signs = nullptr;
-
-						return false;
-					}
-
-					strcpy(stream->signs[i].pattern, pattern.c_str());
-					stream->signs[i].pattern[stream->signs[i].pattern_len] = 0;
+					patch->signs.clear();
+					return ERR_STDIO_FAILED;
 				}
 			}
 		}
 
-		return true;
+		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API bool save_reldb_item_stream(read_reldb_item_stream* stream)
+	long __stdcall reldb_patch_save_stream(reldb_stream* stm, std::shared_ptr<reldb_patch>& patch)
 	{
-		if (!stream || !stream->stream)
-			return false;
+		if (!stm)
+			return ERR_NO_STREAM;
 
-		auto pos_safe = ftell(stream->stream);
+		auto pos_safe = ftell(stm->stream);
 
 		reldb_chunk Chunk = {
 			RELOCATION_DB_ITEM_CHUNK_ID,
@@ -296,152 +269,441 @@ namespace voltek
 			0
 		};
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
 
 		// Версия патча
-		if (!FileWriteBuffer(stream->stream, stream->version))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, patch->version))
+			return ERR_STDIO_FAILED;
 
 		// Имя патча
-		if (!FileWriteString(stream->stream, stream->name))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteString(stm->stream, patch->name))
+			return ERR_STDIO_FAILED;
 
-		auto pos_safe_2 = ftell(stream->stream);
+		auto pos_safe_2 = ftell(stm->stream);
 
 		Chunk.u32Id = RELOCATION_DB_ITEM_DATA_CHUNK_ID;
 		Chunk.u32Version = RELOCATION_DB_ITEM_DATA_CHUNK_VERSION;
 		Chunk.u32Size = 0;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
 
-		if (!FileWriteBuffer(stream->stream, stream->sign_total))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, (uint32_t)patch->signs.size()))
+			return ERR_STDIO_FAILED;
 
 		// Запись данных
-		for (uint32_t i = 0; i < stream->sign_total; i++)
+		for (auto it = patch->signs.begin(); it != patch->signs.end(); it++)
 		{
-			if (!FileWriteBuffer(stream->stream, stream->signs[i].rva))
-			{
-				_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-				return false;
-			}
+			if (!FileWriteBuffer(stm->stream, it->rva))
+				return ERR_STDIO_FAILED;
 
-			if ((stream->signs[i].pattern_len > 0) && stream->signs[i].pattern)
+			if (!it->pattern.empty())
 			{
-				if (!FileWriteString(stream->stream, stream->signs[i].pattern))
-				{
-					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-					return false;
-				}
+				if (!FileWriteString(stm->stream, it->pattern))
+					return ERR_STDIO_FAILED;
 			}
 			else
 			{
-				if (!FileWriteBuffer(stream->stream, (uint16_t)0))
-				{
-					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-					return false;
-				}
+				if (!FileWriteBuffer(stm->stream, (uint16_t)0))
+					return ERR_STDIO_FAILED;
 			}
 		}
 
-		auto pos_end = ftell(stream->stream);
+		auto pos_end = ftell(stm->stream);
 
-		fseek(stream->stream, pos_safe, SEEK_SET);
+		fseek(stm->stream, pos_safe, SEEK_SET);
 
 		Chunk.u32Id = RELOCATION_DB_ITEM_CHUNK_ID;
 		Chunk.u32Version = RELOCATION_DB_ITEM_CHUNK_VERSION;
 		Chunk.u32Size = pos_end - pos_safe;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
 
-		fseek(stream->stream, pos_safe_2, SEEK_SET);
+		fseek(stm->stream, pos_safe_2, SEEK_SET);
 
 		Chunk.u32Id = RELOCATION_DB_ITEM_DATA_CHUNK_ID;
 		Chunk.u32Version = RELOCATION_DB_ITEM_DATA_CHUNK_VERSION;
 		Chunk.u32Size = pos_end - pos_safe_2;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE);
-			return false;
-		}
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
 
-		fseek(stream->stream, pos_end, SEEK_SET);
+		fseek(stm->stream, pos_end, SEEK_SET);
 
-		return true;
+		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API bool load_reldb_item_stream_dev(read_reldb_item_stream* stream)
+	VOLTEK_RELDB_API const char* __stdcall reldb_get_error_text(long err)
 	{
-		if (!stream || !stream->stream || !stream->allocate_handler || !stream->deallocate_handler)
-			return false;
-		
-		auto Buffer = std::make_unique<char[]>(1024);
-		if (!FileGetString(Buffer.get(), 1024, stream->stream))
+		switch (err)
 		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
+		case NO_ERR:
+			return "Ok";
+		case ERR_NO_STREAM:
+			return "Stream is nullptr";
+		case ERR_INCORRECT_FNAME:
+			return "Incorrect file name";
+		case ERR_NOACCESS_FILE:
+			return "Permission denied";
+		case ERR_STDIO_FAILED:
+			return strerror(errno);
+		case ERR_OUT_OF_MEMORY:
+			return "Out of memory";
+		case ERR_FILE_NO_DATABASE:
+			return "File is not a database";
+		case ERR_DATABASE_VERSION_NO_SUPPORTED:
+			return "The file version is not supported";
+		case ERR_DATABASE_NO_INFO:
+			return "There is no information in the database section";
+		case ERR_INCORRECT_CHUNK_SIZE:
+			return "Incorrect chunk size";
+		case ERR_FILE_ID_CORRUPTED:
+			return "File is corrupted";
+		case ERR_PATCH_NO_INFO:
+			return "There is no information in the patch section";
+		case ERR_INDEX_OUT_OF_RANGE:
+			return "Index is out of range";
+		case ERR_INVALID_ARGUMENTS:
+			return "The arguments of the function are set incorrectly";
+		case ERR_NO_FOUND:
+			return "Not found";	
+		case ERR_PATCH_NAME_ALREADY_EXISTS:
+			return "The patch with that name already exists";
+		case ERR_RVA_IN_PATCH_ALREADY_EXISTS:
+			return "The specified offset is already available";
+		default:
+			return "Unknown error";
 		}
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_new_db(reldb_stream** stm, const char* fname,
+		reldb_allocate_func allocate_handler, reldb_deallocate_func deallocate_handler)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!fname)
+			return ERR_INCORRECT_FNAME;
+
+		if (!_access(fname, 0) && _access(fname, 6))
+			return ERR_NOACCESS_FILE;
+
+		*stm = new reldb_stream;
+		if (!(*stm)) return ERR_OUT_OF_MEMORY;
+
+		(*stm)->stream = _fsopen(fname, "wb", _SH_DENYRW);
+		if (!(*stm)->stream)
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		file_unique file(*stm);
+
+		(*stm)->fname = fname;
+		(*stm)->allocate_func = allocate_handler ? allocate_handler : malloc;
+		(*stm)->deallocate_func = deallocate_handler ? deallocate_handler : free;
+
+		reldb_chunk Chunk = {
+			RELOCATION_DB_CHUNK_ID,
+			RELOCATION_DB_CHUNK_VERSION,
+			sizeof(reldb_chunk) + sizeof(uint32_t),
+			0
+		};
+
+		if (!FileWriteBuffer((*stm)->stream, Chunk))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		Chunk.u32Id = RELOCATION_DB_DATA_CHUNK_ID;
+		Chunk.u32Version = RELOCATION_DB_DATA_CHUNK_VERSION;
+		Chunk.u32Size = sizeof(uint32_t);
+
+		if (!FileWriteBuffer((*stm)->stream, Chunk))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		if (!FileWriteBuffer((*stm)->stream, (uint32_t)((*stm)->patches.size())))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_open_db(reldb_stream** stm, const char* fname,
+		reldb_allocate_func allocate_handler, reldb_deallocate_func deallocate_handler)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!fname)
+			return ERR_INCORRECT_FNAME;
+
+		if (_access(fname, 4))
+			return ERR_NOACCESS_FILE;
+
+		*stm = new reldb_stream;
+		if (!(*stm)) return ERR_OUT_OF_MEMORY;
+
+		(*stm)->stream = _fsopen(fname, "rb", _SH_DENYWR);
+		if (!(*stm)->stream)
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		file_unique file(*stm);
+
+		(*stm)->fname = fname;
+		(*stm)->allocate_func = allocate_handler ? allocate_handler : malloc;
+		(*stm)->deallocate_func = deallocate_handler ? deallocate_handler : free;
+
+		reldb_chunk Chunk;
+		memset(&Chunk, 0, sizeof(reldb_chunk));
+
+		if (!FileReadBuffer((*stm)->stream, &Chunk))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		if (Chunk.u32Id != RELOCATION_DB_CHUNK_ID)
+		{
+			delete (*stm);
+			return ERR_FILE_NO_DATABASE;
+		}
+
+		if (Chunk.u32Version != RELOCATION_DB_CHUNK_VERSION)
+		{
+			delete (*stm);
+			return ERR_DATABASE_VERSION_NO_SUPPORTED;
+		}
+
+		if (!Chunk.u32Size)
+		{
+			delete (*stm);
+			return ERR_DATABASE_NO_INFO;
+		}
+
+		if (!FileReadBuffer((*stm)->stream, &Chunk))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		if (Chunk.u32Id != RELOCATION_DB_DATA_CHUNK_ID)
+		{
+			delete (*stm);
+			return ERR_DATABASE_NO_INFO;
+		}
+
+		if (Chunk.u32Version != RELOCATION_DB_DATA_CHUNK_VERSION)
+		{
+			delete (*stm);
+			return ERR_DATABASE_VERSION_NO_SUPPORTED;
+		}
+
+		if (Chunk.u32Size < sizeof(uint32_t))
+		{
+			delete (*stm);
+			return ERR_INCORRECT_CHUNK_SIZE;
+		}
+
+		// Кол-во патчей в базе
+		uint32_t count;
+		if (!FileReadBuffer((*stm)->stream, &count))
+		{
+			delete (*stm);
+			return ERR_STDIO_FAILED;
+		}
+
+		for (uint32_t nId = 0; nId < count; nId++)
+		{
+			auto patch = std::make_shared<reldb_patch>();
+			patch->has_shared = true;
+
+			long result = reldb_patch_open_stream(*stm, patch);
+			if (result == NO_ERR)
+				(*stm)->patches.emplace(patch->name, patch);
+			else
+			{
+				delete (*stm);
+				return result;
+			}
+		}
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_clear_db(reldb_stream* stm)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		stm->patches.clear();
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_save_db(reldb_stream* stm)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		stm->stream = _fsopen(stm->fname.c_str(), "wb", _SH_DENYRW);
+		if (!stm->stream)
+			return ERR_STDIO_FAILED;
+
+		file_unique file(stm);
+
+		reldb_chunk Chunk = {
+			RELOCATION_DB_CHUNK_ID,
+			RELOCATION_DB_CHUNK_VERSION,
+			sizeof(reldb_chunk) + sizeof(uint32_t),
+			0
+		};
+
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
+
+		Chunk.u32Id = RELOCATION_DB_DATA_CHUNK_ID;
+		Chunk.u32Version = RELOCATION_DB_DATA_CHUNK_VERSION;
+		Chunk.u32Size = sizeof(uint32_t);
+
+		if (!FileWriteBuffer(stm->stream, Chunk))
+			return ERR_STDIO_FAILED;
+
+		if (!FileWriteBuffer(stm->stream, (uint32_t)(stm->patches.size())))
+			return ERR_STDIO_FAILED;
+
+		for (auto it = stm->patches.begin(); it != stm->patches.end(); it++)
+		{
+			long result = reldb_patch_save_stream(stm, it->second);
+			if (result != NO_ERR)
+				return result;
+		}
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_release_db(reldb_stream* stm)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		stm->patches.clear();
+		delete stm;
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_count_patches(reldb_stream* stm)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		return (long)stm->patches.size();
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_patch_by_id(reldb_stream* stm, reldb_patch** pch, uint32_t index)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		if (index >= (uint32_t)stm->patches.size())
+			return ERR_INDEX_OUT_OF_RANGE;
+
+		auto bg = stm->patches.begin();
+		std::advance(bg, index);
+		*pch = bg->second.get();
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_patch_by_name(reldb_stream* stm, reldb_patch** pch, const char* name)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!name)
+			return ERR_INVALID_ARGUMENTS;
+
+		auto bg = stm->patches.find(name);
+		if (bg == stm->patches.end())
+			return ERR_NO_FOUND;
+
+		*pch = bg->second.get();
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API bool __stdcall reldb_has_patch(reldb_stream* stm, const char* name)
+	{
+		reldb_patch* pch = nullptr;
+		return reldb_get_patch_by_name(stm, &pch, name) == NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_open_dev_file_patch(reldb_stream* stm, reldb_patch** pch, const char* fname)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+		
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		if (!fname)
+			return ERR_INCORRECT_FNAME;
+
+		if (_access(fname, 4))
+			return ERR_NOACCESS_FILE;
+
+		stm->stream = _fsopen(fname, "rt", _SH_DENYWR);
+		if (!stm->stream)
+			return ERR_STDIO_FAILED;
+
+		file_unique file(stm);
+
+		*pch = new reldb_patch();
+		(*pch)->has_shared = false;
+
+		auto Buffer = std::make_unique<char[]>(1024);
+		if (!FileGetString(Buffer.get(), 1024, stm->stream))
+			return ERR_STDIO_FAILED;
 
 		auto _name = Trim(Buffer.get());
-		strcpy_s(stream->name, _name.c_str());
-		_MESSAGE_VA(stream->msg_handler, "\tThe patch name: \"%s\"", stream->name);
+		strcpy_s((*pch)->name, _name.c_str());
 
-		if (!FileGetString(Buffer.get(), 1024, stream->stream))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
+		if (!FileGetString(Buffer.get(), 1024, stm->stream))
+			return ERR_STDIO_FAILED;
 
 		char* EndPtr = nullptr;
-		stream->version = strtoul(Buffer.get(), &EndPtr, 10);
-		_MESSAGE_VA(stream->msg_handler, "\tThe patch version: %u", stream->version);
+		(*pch)->version = strtoul(Buffer.get(), &EndPtr, 10);
 
-		auto pos_safe = ftell(stream->stream);
-		if (!FileGetString(Buffer.get(), 1024, stream->stream))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
-
-		std::vector<reldb_signature> sings;
+		auto pos_safe = ftell(stm->stream);
+		if (!FileGetString(Buffer.get(), 1024, stm->stream))
+			return ERR_STDIO_FAILED;
 
 		if (!_stricmp(Trim(Buffer.get()).c_str(), EXTENDED_FORMAT))
 		{
-			_MESSAGE_VA(stream->msg_handler, "\tExtended format");
-
 			uint32_t rva;
 			auto pattern = std::make_unique<char[]>(256);
 			uint32_t pattern_len;
 
-			while (!feof(stream->stream))
+			while (!feof(stm->stream))
 			{
-				if (!FileGetString(Buffer.get(), 1024, stream->stream))
-				{
-					_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-					return false;
-				}
+				if (!FileGetString(Buffer.get(), 1024, stm->stream))
+					return ERR_STDIO_FAILED;
 
 				auto Row = Trim(Buffer.get());
 				if (!Row.empty() && (sscanf(Row.c_str(), "%X %u %s", &rva, &pattern_len, pattern.get()) == 3))
@@ -450,209 +712,231 @@ namespace voltek
 					memset(&s, 0, sizeof(reldb_signature));
 
 					s.rva = rva;
-					s.pattern_len = (uint32_t)strlen(pattern.get());
-					if (s.pattern_len)
-					{
-						s.pattern = (char*)stream->allocate_handler((size_t)s.pattern_len + 1);
-						if (!s.pattern)
-						{
-							_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
+					s.pattern = pattern.get();
 
-							stream->deallocate_handler(stream->signs);
-							stream->signs = nullptr;
-
-							return false;
-						}
-
-						strcpy(s.pattern, pattern.get());
-						s.pattern[s.pattern_len] = 0;
-					}
-					else
-						s.pattern = nullptr;
-
-					sings.push_back(s);
+					(*pch)->signs.push_back(s);
 				}
 			}
 		}
 		else
 		{
-			std::vector<reldb_signature> sings;
-
-			fseek(stream->stream, pos_safe, SEEK_SET);
+			fseek(stm->stream, pos_safe, SEEK_SET);
 			uint32_t rva;
-			while (!feof(stream->stream))
+			while (!feof(stm->stream))
 			{
-				if (fscanf(stream->stream, "%X", &rva) == 1)
+				if (fscanf(stm->stream, "%X", &rva) == 1)
 				{
 					reldb_signature s;
 					memset(&s, 0, sizeof(reldb_signature));
 
 					s.rva = rva;
-					sings.push_back(s);
+					(*pch)->signs.push_back(s);
 				}
 			}
 		}
 
-		stream->sign_total = sings.size();
-		stream->signs = (reldb_signature*)stream->allocate_handler((size_t)stream->sign_total * sizeof(reldb_signature));
-		if (!stream->signs)
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ);
-			return false;
-		}
-
-		memcpy(stream->signs, sings.data(), (size_t)stream->sign_total * sizeof(reldb_signature));
-
-		return true;
+		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API bool save_reldb_item_stream_dev(read_reldb_item_stream* stream)
+	VOLTEK_RELDB_API long __stdcall reldb_save_dev_file_patch(reldb_stream* stm, reldb_patch* pch, const char* fname)
 	{
-		if (!stream || !stream->stream)
-			return false;
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		if (!fname)
+			return ERR_INCORRECT_FNAME;
+
+		stm->stream = _fsopen(fname, "wt", _SH_DENYRW);
+		if (!stm->stream)
+			return ERR_STDIO_FAILED;
+
+		file_unique file(stm);
 
 		// Запись имени патча
-		fputs(stream->name, stream->stream);
-		fputc('\n', stream->stream);
+		fputs(pch->name, stm->stream);
+		fputc('\n', stm->stream);
 		// Запись версии патча
-		fprintf(stream->stream, "%u\n", stream->version);
+		fprintf(stm->stream, "%u\n", pch->version);
 		// Расширенный формат
-		fputs(EXTENDED_FORMAT, stream->stream);
+		fputs(EXTENDED_FORMAT, stm->stream);
 		// Запись данных
-		for (uint32_t i = 0; i < stream->sign_total; i++)
-			fprintf(stream->stream, "%X %u %s\n", stream->signs[i].rva, stream->signs[i].pattern_len, stream->signs[i].pattern);
+		for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
+			fprintf(stm->stream, "%X %u %s\n", it->rva, (uint32_t)it->pattern.length(), it->pattern.c_str());
 
-		return true;
+		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API bool create_reldb_stream(read_reldb_stream* stream)
+	VOLTEK_RELDB_API long __stdcall reldb_add_patch(reldb_stream* stm, reldb_patch* pch, bool free_tmp_patch)
 	{
-		reldb_chunk Chunk = {
-			RELOCATION_DB_CHUNK_ID,
-			RELOCATION_DB_CHUNK_VERSION,
-			sizeof(reldb_chunk) + sizeof(uint32_t),
-			0
-		};
+		if (!stm)
+			return ERR_NO_STREAM;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
-		}
+		if (!pch || (pch->has_shared && free_tmp_patch))
+			return ERR_INVALID_ARGUMENTS;
 
-		Chunk.u32Id = RELOCATION_DB_DATA_CHUNK_ID;
-		Chunk.u32Version = RELOCATION_DB_DATA_CHUNK_VERSION;
-		Chunk.u32Size = sizeof(uint32_t);
+		if (reldb_has_patch(stm, pch->name))
+			return ERR_PATCH_NAME_ALREADY_EXISTS;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
-		}
+		auto patch = std::make_shared<reldb_patch>();
+		patch->has_shared = true;
 
-		if (!FileWriteBuffer(stream->stream, stream->patch_total))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
-		}
+		strcpy_s(patch->name, pch->name);
+		patch->version = pch->version;
+		patch->signs.assign(pch->signs.begin(), pch->signs.end());
 
-		return true;
+		stm->patches.emplace();
+
+		if (free_tmp_patch)
+			delete pch;
+
+		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API bool open_reldb_stream(read_reldb_stream* stream)
+	VOLTEK_RELDB_API long __stdcall reldb_update_patch(reldb_stream* stm, reldb_patch* pch, bool free_tmp_patch)
 	{
-		reldb_chunk Chunk;
-		memset(&Chunk, 0, sizeof(reldb_chunk));
+		if (!stm)
+			return ERR_NO_STREAM;
 
-		if (!FileReadBuffer(stream->stream, &Chunk))
+		if (!pch || (pch->has_shared && free_tmp_patch))
+			return ERR_INVALID_ARGUMENTS;
+
+		reldb_patch* pch_exists = nullptr;
+		auto ret = reldb_get_patch_by_name(stm, &pch_exists, pch->name);
+
+		if (ret == NO_ERR)
 		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ2);
-			return false;
-		}
+			strcpy_s(pch_exists->name, pch->name);
+			pch_exists->version = pch->version;
+			pch_exists->signs.assign(pch->signs.begin(), pch->signs.end());
 
-		if (Chunk.u32Id != RELOCATION_DB_CHUNK_ID)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: This is not database");
-			return false;
+			return NO_ERR;
 		}
-
-		if (Chunk.u32Version != RELOCATION_DB_CHUNK_VERSION)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: The database version is not supported, please update the platform");
-			return false;
-		}
-
-		if (!Chunk.u32Size)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: There is no database data");
-			return false;
-		}
-
-		if (!FileReadBuffer(stream->stream, &Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ2);
-			return false;
-		}
-
-		if (Chunk.u32Id != RELOCATION_DB_DATA_CHUNK_ID)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: This is not database data");
-			return false;
-		}
-
-		if (Chunk.u32Version != RELOCATION_DB_DATA_CHUNK_VERSION)
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: The database data version is not supported, please update the platform");
-			return false;
-		}
-
-		if (Chunk.u32Size < sizeof(uint32_t))
-		{
-			_MESSAGE(stream->msg_handler, "[ERROR] RelocationDatabase: Chunk.u32Size < sizeof(uint32_t)");
-			return false;
-		}
-
-		// Кол-во патчей в базе
-		if (!FileReadBuffer(stream->stream, &stream->patch_total))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_READ2);
-			return false;
-		}
-
-		return true;
+		
+		return reldb_add_patch(stm, pch, free_tmp_patch);
 	}
 
-	VOLTEK_RELDB_API bool update_reldb_stream(read_reldb_stream* stream)
+	VOLTEK_RELDB_API long __stdcall reldb_remove_patch_by_id(reldb_stream* stm, uint32_t index)
 	{
-		reldb_chunk Chunk = {
-			RELOCATION_DB_CHUNK_ID,
-			RELOCATION_DB_CHUNK_VERSION,
-			sizeof(reldb_chunk) + sizeof(uint32_t),
-			0
-		};
+		if (!stm)
+			return ERR_NO_STREAM;
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
+		if (index >= (uint32_t)stm->patches.size())
+			return ERR_INDEX_OUT_OF_RANGE;
+
+		auto bg = stm->patches.begin();
+		std::advance(bg, index);
+		
+		stm->patches.erase(bg);
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_remove_patch(reldb_stream* stm, const char* name)
+	{
+		if (!stm)
+			return ERR_NO_STREAM;
+
+		if (!name)
+			return ERR_INCORRECT_FNAME;
+
+		auto bg = stm->patches.find(name);
+		if (bg == stm->patches.end())
+			return ERR_NO_FOUND;
+
+		stm->patches.erase(bg);
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_count_signatures_in_patch(reldb_patch* pch)
+	{
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		return (long)pch->signs.size();
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_version_patch(reldb_patch* pch)
+	{
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		return (long)pch->version;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_name_patch(reldb_patch* pch, char* name, uint32_t maxsize)
+	{
+		if (!pch || !name)
+			return ERR_INVALID_ARGUMENTS;
+
+		if (!maxsize)
+			return NO_ERR;
+
+		strcpy_s(name, maxsize, pch->name);
+		name[maxsize] = 0;
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_signature_patch(reldb_patch* pch, reldb_signature** sign, uint32_t index)
+	{
+		if (!pch || !sign)
+			return ERR_INVALID_ARGUMENTS;
+
+		if (index >= (uint32_t)pch->signs.size())
+			return ERR_INDEX_OUT_OF_RANGE;
+
+		*sign = &(pch->signs[index]);
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_add_signature_to_patch(reldb_patch* pch, uint32_t rva, const char* pattern)
+	{
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
 		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
+			if (it->rva == rva)
+				return ERR_RVA_IN_PATCH_ALREADY_EXISTS;
 		}
 
-		Chunk.u32Id = RELOCATION_DB_DATA_CHUNK_ID;
-		Chunk.u32Version = RELOCATION_DB_DATA_CHUNK_VERSION;
-		Chunk.u32Size = sizeof(uint32_t);
+		reldb_signature s;
+		s.rva = rva;
+		if (pattern) s.pattern = pattern;
+		pch->signs.push_back(s);
 
-		if (!FileWriteBuffer(stream->stream, Chunk))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
-		}
+		return NO_ERR;
+	}
 
-		if (!FileWriteBuffer(stream->stream, stream->patch_total))
-		{
-			_MESSAGE(stream->msg_handler, MESSAGE_FAILED_WRITE2);
-			return false;
-		}
+	VOLTEK_RELDB_API long __stdcall reldb_remove_signature_from_patch(reldb_patch* pch, uint32_t index)
+	{
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
 
-		return true;
+		if (index >= (uint32_t)pch->signs.size())
+			return ERR_INDEX_OUT_OF_RANGE;
+
+		auto bg = pch->signs.begin();
+		std::advance(bg, index);
+		pch->signs.erase(bg);
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_clear_signatures_in_patch(reldb_patch* pch)
+	{
+		if (!pch)
+			return ERR_INVALID_ARGUMENTS;
+
+		pch->signs.clear();
+
+		return NO_ERR;
 	}
 }
+
+#pragma pack(pop)
