@@ -161,7 +161,7 @@ namespace voltek
 	{
 		if (!stm)
 			return ERR_NO_STREAM;
-		
+
 		reldb_chunk Chunk;
 		memset(&Chunk, 0, sizeof(reldb_chunk));
 
@@ -189,7 +189,7 @@ namespace voltek
 
 		_name = Trim(_name);
 		strncpy_s(patch->name, _name.c_str(), _name.length());
-		
+
 		if (!FileReadBuffer(stm->stream, &Chunk))
 			return ERR_STDIO_FAILED;
 
@@ -368,7 +368,7 @@ namespace voltek
 		case ERR_INVALID_ARGUMENTS:
 			return "The arguments of the function are set incorrectly";
 		case ERR_NO_FOUND:
-			return "Not found";	
+			return "Not found";
 		case ERR_PATCH_NAME_ALREADY_EXISTS:
 			return "The patch with that name already exists";
 		case ERR_RVA_IN_PATCH_ALREADY_EXISTS:
@@ -658,7 +658,7 @@ namespace voltek
 	{
 		if (!stm)
 			return ERR_NO_STREAM;
-		
+
 		if (!pch)
 			return ERR_INVALID_ARGUMENTS;
 
@@ -814,7 +814,7 @@ namespace voltek
 
 			return NO_ERR;
 		}
-		
+
 		return reldb_add_patch(stm, pch, free_tmp_patch);
 	}
 
@@ -828,7 +828,7 @@ namespace voltek
 
 		auto bg = stm->patches.begin();
 		std::advance(bg, index);
-		
+
 		stm->patches.erase(bg);
 
 		return NO_ERR;
@@ -936,6 +936,28 @@ namespace voltek
 		pch->signs.clear();
 
 		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API uint32_t __stdcall reldb_get_rva_from_signature(reldb_signature* sign)
+	{
+		if (!sign) return 0;
+		return sign->rva;
+	}
+
+	VOLTEK_RELDB_API long __stdcall reldb_get_pattern_from_signature(reldb_signature* sign, char* name, uint32_t maxsize)
+	{
+		if (!sign || !name || !maxsize)
+			return ERR_INVALID_ARGUMENTS;
+
+		strcpy_s(name, maxsize, sign->pattern.c_str());
+
+		return NO_ERR;
+	}
+
+	VOLTEK_RELDB_API uint32_t __stdcall reldb_get_pattern_length_from_signature(reldb_signature* sign)
+	{
+		if (!sign) return 0;
+		return sign->pattern.empty() ? 0 : sign->pattern.length();
 	}
 }
 
