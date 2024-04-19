@@ -957,7 +957,7 @@ namespace voltek
 	VOLTEK_RELDB_API uint32_t __stdcall reldb_get_pattern_length_from_signature(reldb_signature* sign)
 	{
 		if (!sign) return 0;
-		return sign->pattern.empty() ? 0 : sign->pattern.length();
+		return sign->pattern.empty() ? 0 : (uint32_t)sign->pattern.length();
 	}
 }
 
