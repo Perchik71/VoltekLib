@@ -762,6 +762,7 @@ namespace voltek
 		fprintf(stm->stream, "%u\n", pch->version);
 		// Расширенный формат
 		fputs(EXTENDED_FORMAT, stm->stream);
+		fputc('\n', stm->stream);
 		// Запись данных
 		for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
 			fprintf(stm->stream, "%X %u %s\n", it->rva, (uint32_t)it->pattern.length(), it->pattern.c_str());
@@ -787,7 +788,7 @@ namespace voltek
 		patch->version = pch->version;
 		patch->signs.assign(pch->signs.begin(), pch->signs.end());
 
-		stm->patches.emplace();
+		stm->patches.emplace(patch->name, patch);
 
 		if (free_tmp_patch)
 			delete pch;
@@ -894,15 +895,18 @@ namespace voltek
 		return NO_ERR;
 	}
 
-	VOLTEK_RELDB_API long __stdcall reldb_add_signature_to_patch(reldb_patch* pch, uint32_t rva, const char* pattern)
+	VOLTEK_RELDB_API long __stdcall reldb_add_signature_to_patch(reldb_patch* pch, uint32_t rva, const char* pattern, bool check_exist)
 	{
 		if (!pch)
 			return ERR_INVALID_ARGUMENTS;
 
-		for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
+		if (check_exist)
 		{
-			if (it->rva == rva)
-				return ERR_RVA_IN_PATCH_ALREADY_EXISTS;
+			for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
+			{
+				if (it->rva == rva)
+					return ERR_RVA_IN_PATCH_ALREADY_EXISTS;
+			}
 		}
 
 		reldb_signature s;

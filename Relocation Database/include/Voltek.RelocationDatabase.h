@@ -44,7 +44,7 @@ namespace voltek
 	VOLTEK_RELDB_API long __stdcall reldb_get_name_patch(reldb_patch* pch, char* name, uint32_t maxsize);
 	VOLTEK_RELDB_API long __stdcall reldb_count_signatures_in_patch(reldb_patch* pch);	
 	VOLTEK_RELDB_API long __stdcall reldb_get_signature_patch(reldb_patch* pch, reldb_signature** sign, uint32_t index);
-	VOLTEK_RELDB_API long __stdcall reldb_add_signature_to_patch(reldb_patch* pch, uint32_t rva, const char* pattern);
+	VOLTEK_RELDB_API long __stdcall reldb_add_signature_to_patch(reldb_patch* pch, uint32_t rva, const char* pattern, bool check_exist = true);
 	VOLTEK_RELDB_API long __stdcall reldb_remove_signature_from_patch(reldb_patch* pch, uint32_t index);
 	VOLTEK_RELDB_API long __stdcall reldb_clear_signatures_in_patch(reldb_patch* pch);
 
