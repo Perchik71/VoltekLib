@@ -953,7 +953,7 @@ namespace voltek
 		if (!sign || !name || !maxsize)
 			return ERR_INVALID_ARGUMENTS;
 
-		strcpy_s(name, maxsize, sign->pattern.c_str());
+		memcpy(name, sign->pattern.c_str(), std::min(maxsize, (uint32_t)sign->pattern.length()));
 
 		return NO_ERR;
 	}
