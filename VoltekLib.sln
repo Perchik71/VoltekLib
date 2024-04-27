@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "UnicodeConverter", "Unicode
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RelocationDatabase", "Relocation Database\RelocationDatabase.vcxproj", "{2E2B6346-5155-45BC-AF2D-CFB47BE95CAB}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "DBRebuilder", "DBRebuilder\DBRebuilder.vcxproj", "{F9B12E53-3073-4D6B-B3D6-3CF52430240E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{2E2B6346-5155-45BC-AF2D-CFB47BE95CAB}.Release|x64.Build.0 = Release|x64
 		{2E2B6346-5155-45BC-AF2D-CFB47BE95CAB}.Release|x86.ActiveCfg = Release|Win32
 		{2E2B6346-5155-45BC-AF2D-CFB47BE95CAB}.Release|x86.Build.0 = Release|Win32
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Debug|x64.ActiveCfg = Debug|x64
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Debug|x64.Build.0 = Debug|x64
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Debug|x86.ActiveCfg = Debug|Win32
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Debug|x86.Build.0 = Debug|Win32
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Release|x64.ActiveCfg = Release|x64
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Release|x64.Build.0 = Release|x64
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Release|x86.ActiveCfg = Release|Win32
+		{F9B12E53-3073-4D6B-B3D6-3CF52430240E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

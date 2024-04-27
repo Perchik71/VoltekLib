@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="src">
+      <UniqueIdentifier>{f831e223-e5aa-4a88-996f-e0a177bfb88e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="source_file.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="pattern.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="zydis_hide.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="DBRebuilder.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="source_file.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="pattern.h">
+      <Filter>src</Filter>
+    </ClInclude>
+    <ClInclude Include="common.h">
+      <Filter>src</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

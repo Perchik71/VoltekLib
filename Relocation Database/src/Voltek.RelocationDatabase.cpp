@@ -714,6 +714,9 @@ namespace voltek
 					s.rva = rva;
 					s.pattern = pattern.get();
 
+					if (s.pattern == "<nope>")
+						s.pattern.clear();
+
 					(*pch)->signs.push_back(s);
 				}
 			}
@@ -763,9 +766,19 @@ namespace voltek
 		// Расширенный формат
 		fputs(EXTENDED_FORMAT, stm->stream);
 		fputc('\n', stm->stream);
+
+		size_t c = 0;
 		// Запись данных
 		for (auto it = pch->signs.begin(); it != pch->signs.end(); it++)
-			fprintf(stm->stream, "%X %u %s\n", it->rva, (uint32_t)it->pattern.length(), it->pattern.c_str());
+		{
+			fprintf(
+				stm->stream, 
+				(c == pch->signs.size() - 1) ? "%X %u %s" : "%X %u %s\n", 
+				it->rva, 
+				(uint32_t)it->pattern.length(),
+				!it->pattern.length() ? "<nope>" : it->pattern.c_str());
+			c++;
+		}
 
 		return NO_ERR;
 	}
