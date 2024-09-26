@@ -26,7 +26,8 @@ namespace voltek
 		constexpr static size_t POOL_16384 = 10;
 		constexpr static size_t POOL_32768 = 11;
 		constexpr static size_t POOL_65536 = 12;
-		constexpr static size_t POOL_MAX = POOL_65536 + 1;
+		constexpr static size_t POOL_131072 = 13;
+		constexpr static size_t POOL_MAX = POOL_131072 + 1;
 
 		// Менеджер памяти.
 		class memory_manager : public voltek::core::base

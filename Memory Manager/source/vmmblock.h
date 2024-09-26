@@ -94,6 +94,8 @@ namespace voltek
 		typedef block_base_t<32768> block32768_t;
 		// Фиксируемый блок на 65536 байт.
 		typedef block_base_t<65536> block65536_t;
+		// Фиксируемый блок на 131072 байт.
+		typedef block_base_t<131072> block131072_t;
 
 		static_assert(sizeof(block8_t) == 0x20, "sizeof(block8_t) == 0x20");
 		static_assert(sizeof(block16_t) == 0x20, "sizeof(block16_t) == 0x20");
@@ -108,6 +110,7 @@ namespace voltek
 		static_assert(sizeof(block16384_t) == 0x4010, "sizeof(block16384_t) == 0x4010");
 		static_assert(sizeof(block32768_t) == 0x8010, "sizeof(block32768_t) == 0x8010");
 		static_assert(sizeof(block65536_t) == 0x10010, "sizeof(block65536_t) == 0x10010");
+		static_assert(sizeof(block131072_t) == 0x20010, "sizeof(block131072_t) == 0x20010");
 
 		// Для проверки на валидность блока, от иной памяти выделенной, чем-то иным.
 		static constexpr uint32_t prologue_block = 0xdadafead;

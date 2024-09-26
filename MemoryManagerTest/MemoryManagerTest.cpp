@@ -179,6 +179,8 @@ void test_01(size_t block_size)
 		for (size_t i = 0; i < MAX; i++)
 		{
 			test_arch[i] = (char*)voltek::scalable_alloc(bsize);
+			strcpy_s(test_arch[i], bsize, "hi");
+			*test_arch[i] = '\xC';
 		}
 
 		auto t2 = std::chrono::high_resolution_clock::now();
@@ -240,7 +242,7 @@ int main()
 	std::cout << "\n\n";
 	system("pause");
 
-	size_t sizes[] = { 8, 16, 32, 64, 128, /*256, 512, 1024, 4096, 8192, 16384, 32768,*/ 65536 };
+	size_t sizes[] = { 8, 16, 32, 64, 128, 256, 512, 1024, 4096, 8192,/* 16384, 32768, 65536 */ };
 
 	for (size_t i = 0; i < ARRAYSIZE(sizes); i++)
 	{
