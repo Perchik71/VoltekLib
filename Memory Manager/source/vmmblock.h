@@ -105,9 +105,9 @@ namespace voltek
 		static_assert(sizeof(block1024_t) == 0x410, "sizeof(block1024_t) == 0x410");
 		static_assert(sizeof(block4096_t) == 0x1010, "sizeof(block4096_t) == 0x1010");
 		static_assert(sizeof(block8192_t) == 0x2010, "sizeof(block8192_t) == 0x2010");
-		static_assert(sizeof(block16384_t) == 0x4010, "sizeof(block16384_t) == 0x410");
-		static_assert(sizeof(block32768_t) == 0x8010, "sizeof(block32768_t) == 0x1010");
-		static_assert(sizeof(block65536_t) == 0x10010, "sizeof(block65536_t) == 0x2010");
+		static_assert(sizeof(block16384_t) == 0x4010, "sizeof(block16384_t) == 0x4010");
+		static_assert(sizeof(block32768_t) == 0x8010, "sizeof(block32768_t) == 0x8010");
+		static_assert(sizeof(block65536_t) == 0x10010, "sizeof(block65536_t) == 0x10010");
 
 		// Для проверки на валидность блока, от иной памяти выделенной, чем-то иным.
 		static constexpr uint32_t prologue_block = 0xdadafead;
