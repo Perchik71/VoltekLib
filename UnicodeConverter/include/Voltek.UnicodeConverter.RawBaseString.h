@@ -61,6 +61,9 @@ namespace voltek
 			return false;
 		}
 
+		inline _Ty* begin() const { return _raw; }
+		inline _Ty* end() const { return _raw + _len + 1; }
+
 		inline void clear() { resize(0); }
 		inline _Ty* data() { return _raw; }
 		inline const _Ty* c_str() const { return empty() ? EMPTY_STRING : _raw; }

@@ -4,11 +4,15 @@
 
 #include "..\include\Voltek.UnicodeConverter.h"
 
+#define _USE_UTF8CPPLIB
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 
 #include <algorithm>
+#ifdef _USE_UTF8CPPLIB
+#	include "utf8.h"
+#endif
 
 namespace voltek
 {
@@ -381,6 +385,22 @@ namespace voltek
 		if (is_ascii(str))
 			return str;
 
+#ifdef _USE_UTF8CPPLIB
+		std::wstring utf16line;
+		utf8::utf8to16(str.begin(), str.end(), back_inserter(utf16line));
+
+		if (utf16line.empty())
+			return str;
+
+		ansistring ret;
+		auto len = WideCharToMultiByte(CP_ACP, 0, utf16line.c_str(), (int)utf16line.length(), nullptr, 0, nullptr, nullptr);
+
+		if (len > 0)
+		{
+			ret.resize(len);
+			WideCharToMultiByte(CP_ACP, 0, utf16line.c_str(), (int)utf16line.length(), ret.data(), len, nullptr, nullptr);
+	}
+#else
 		auto src = utf8decode(str);
 		if (src.empty())
 			return str;
@@ -393,7 +413,7 @@ namespace voltek
 			ret.resize(len);
 			WideCharToMultiByte(CP_ACP, 0, src.c_str(), (int)src.length(), ret.data(), len, nullptr, nullptr);
 		}
-
+#endif
 		return ret;
 	}
 
@@ -410,7 +430,13 @@ namespace voltek
 		src.resize(len);
 		MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED, str.c_str(), (int)str.length(), src.data(), len);
 
+#ifdef _USE_UTF8CPPLIB
+		std::string utf8line;
+		utf8::utf16to8(str.begin(), str.end(), back_inserter(utf8line));
+		return utf8line.c_str();
+#else
 		return utf8encode(src);
+#endif
 	}
 
 	VOLTEK_UP_API int utf8_to_wincp(const char* asource, char* adest, bool test_on_invalid)

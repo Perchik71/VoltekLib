@@ -36,11 +36,11 @@ bool source_file::open(const char* fname)
 		get_pe_section_range(nullptr, &start, &_begin);
 		// get range code in file
 		get_pe_section_range(".text", &_code_start, &_code_end);
-		if (get_pe_section_range(".textbss", &start, &end))
+		/*if (get_pe_section_range(".textbss", &start, &end))
 		{
 			_code_start = std::min(_code_start, start);
 			_code_end = std::max(_code_end, end);
-		}
+		}*/
 		//// correction
 		//if (_begin < _code_start)
 		//{
@@ -63,12 +63,12 @@ void source_file::get_code_range(uint32_t* start, uint32_t* end) const
 
 uint32_t source_file::off2rva(uint32_t target) const
 {
-	return (target - _begin) + START_PROCESS_ADDR;
+	return (target - _begin) + _code_start;
 }
 
 uint32_t source_file::rva2off(uint32_t target) const
 {
-	return (target - START_PROCESS_ADDR) + _begin;
+	return (target - _code_start) + _begin;
 }
 
 bool source_file::is_rva_in_code_range(uint32_t rva) const
@@ -234,7 +234,7 @@ bool source_file::get_mask_by_raw64(uint32_t rva, std::string& mask) const
 		return false;
 
 	pattern p;
-	mask = p.transform(raw);
+	mask = p.transform(raw, rva);
 
 	return true;
 }

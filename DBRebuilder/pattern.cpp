@@ -6,8 +6,29 @@ extern "C" int zydis_release_instruction(void* instruction);
 extern "C" int zydis_init_instruction(void* instruction, void* raw);
 extern "C" int zydis_instruction_length(void* instruction);
 extern "C" int zydis_instruction_has_address(void* instruction);
+extern "C" int zydis_instruction_opcode(void* instruction);
+extern "C" unsigned __int64 zydis_instruction_attributes(void* instruction);
 
 #include <iostream>
+
+int zydis_instruction_arg_width(void* instruction)
+{
+	auto flags = zydis_instruction_attributes(instruction);
+
+	switch ((uint8_t)zydis_instruction_opcode(instruction))
+	{
+	case 0x81:
+		return 4;
+	case 0x83:
+		return 1;
+	case 0xC6: // mov
+		return 1;
+	case 0xC7: // mov
+		return flags & (1llu << 34) ? 2 : 4;
+	default:
+		return 0;
+	}
+}
 
 pattern::pattern()
 {
@@ -25,7 +46,7 @@ bool pattern::failed_beg(std::string raw) const
 	return zydis_init_instruction(_instruction, raw.data()) != 0;
 }
 
-std::string pattern::transform(std::string raw) const
+std::string pattern::transform(std::string raw, uint32_t rva) const
 {
 	std::string mask = "";
 	if (raw.empty()) return mask;
@@ -36,21 +57,27 @@ std::string pattern::transform(std::string raw) const
 		if (zydis_init_instruction(_instruction, raw.data() + endPattern))
 			break;
 
-		auto len = zydis_instruction_length(_instruction);
+		size_t len = zydis_instruction_length(_instruction);
 		if (!zydis_instruction_has_address(_instruction))
 		{
-			if (len < 4)
+			size_t arg_width = zydis_instruction_arg_width(_instruction);
+			if (arg_width > 0)
 			{
-				if (len != 2)
-					break;
-				
-				mask.append(hex2str((uint8_t*)raw.data() + endPattern, (size_t)len - 1));
-				mask.append("??");
+				mask.append(hex2str((uint8_t*)raw.data() + endPattern, (size_t)len));
+				mask.replace(len - (arg_width + 4), len - arg_width, "????????");
 			}
 			else
 			{
-				mask.append(hex2str((uint8_t*)raw.data() + endPattern, (size_t)len - 4));
-				mask.append("????????");
+				if (len > 4)
+				{
+					mask.append(hex2str((uint8_t*)raw.data() + endPattern, (size_t)len - 4));
+					mask.append("????????");
+				}
+				else
+				{
+					mask.append(hex2str((uint8_t*)raw.data() + endPattern, (size_t)len - 1));
+					mask.append("??");
+				}
 			}
 		}
 		else

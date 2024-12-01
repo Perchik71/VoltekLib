@@ -9,6 +9,15 @@
 
 #include "source_file.h"
 
+namespace voltek
+{
+    struct reldb_signature
+    {
+        uint32_t rva;
+        std::string pattern;
+    };
+}
+
 class reldb_protect
 {
 public:
@@ -23,7 +32,6 @@ void pause()
     char ch;
     std::cin >> ch;
 }
-
 
 void action_rebase(const char* fname_exe, const char* fname_database, bool save_database)
 {
@@ -283,12 +291,8 @@ void action_base_transform(const char* fname_exe, const char* fname_database, co
                 continue;
             }
 
-            auto len = voltek::reldb_get_pattern_length_from_signature(signature);
-            if (len > 0)
-            {
-                mask.resize(len);
-                voltek::reldb_get_pattern_from_signature(signature, mask.data(), len);
-            }
+            if (old_file_exe.can_mask_by_raw64(signature->rva))
+                old_file_exe.get_mask_by_raw64(signature->rva, mask);
             else
             {
                 total_failed++;
@@ -297,8 +301,45 @@ void action_base_transform(const char* fname_exe, const char* fname_database, co
                 continue;
             }
 
+            auto old_find_rva = old_file_exe.find_pattern(mask);
+            ptrdiff_t distance = (ptrdiff_t)rva - old_find_rva;
 
-            DWORD mode_sign = 0;
+            auto new_find_rva = new_file_exe.find_patterns(mask);
+            if (new_find_rva.size() != 1)
+            {
+                total_failed++;
+                signs.push_back(std::make_pair(0, ""));
+
+                continue;
+            }
+
+            signs.push_back(std::make_pair((uint32_t)(((ptrdiff_t)new_find_rva[0]) + distance), mask));
+
+            /*auto len = voltek::reldb_get_pattern_length_from_signature(signature);
+            if (len > 0)
+            {
+                mask.resize(len);
+                voltek::reldb_get_pattern_from_signature(signature, mask.data(), len);
+            }
+            else
+            {
+                if (old_file_exe.can_mask_by_raw64(signature->rva))
+                {
+                    old_file_exe.get_mask_by_raw64(signature->rva, mask);
+                    signs.push_back(std::make_pair(rva, mask));
+
+                    continue;
+                }
+                else
+                {
+                    total_failed++;
+                    signs.push_back(std::make_pair(rva, ""));
+
+                    continue;
+                }
+            }*/
+
+           /* DWORD mode_sign = 0;
 
             if (mask.length() > 0)
             {
@@ -362,7 +403,7 @@ void action_base_transform(const char* fname_exe, const char* fname_database, co
                 signs.push_back(std::make_pair((uint32_t)(((ptrdiff_t)new_find_rva[0]) + distance), mask));
             }
             break;
-            }
+            }*/
         }
 
         err = voltek::reldb_clear_signatures_in_patch(patch);
@@ -403,10 +444,15 @@ int main()
 {
     //action_rebase("CreationKit.exe", "CreationKitPlatformExtended_FO4_1_10_162.database", true);
     
-    action_base_transform(
+    /*action_base_transform(
         "CreationKit_f4_1_10_162.exe", 
         "CreationKitPlatformExtended_FO4_1_10_943_1.database", 
-        "CreationKit_f4_1_10_943_1.exe");
+        "CreationKit_f4_1_10_943_1.exe");*/
+
+    action_base_transform(
+        "CreationKit_se_1_6_1130.exe",
+        "CreationKitPlatformExtended_SSE_1_6_1130.database",
+        "CreationKit_se_1_6_1378_1.exe");
 
     pause();
 }

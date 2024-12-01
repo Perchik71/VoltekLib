@@ -146,5 +146,16 @@ int zydis_instruction_length(void* instruction)
 
 int zydis_instruction_has_address(void* instruction)
 {
-	return ((ZydisDecodedInstruction*)instruction)->attributes & (1 << 7) ? 0 : 1;
+	return ((ZydisDecodedInstruction*)instruction)->attributes & ZYDIS_ATTRIB_IS_RELATIVE ? 0 : 1;
 }
+
+int zydis_instruction_opcode(void* instruction)
+{
+	return ((ZydisDecodedInstruction*)instruction)->opcode;
+}
+
+unsigned __int64 zydis_instruction_attributes(void* instruction)
+{
+	return ((ZydisDecodedInstruction*)instruction)->attributes;
+}
+

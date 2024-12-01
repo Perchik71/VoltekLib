@@ -14,7 +14,7 @@ public:
 	~pattern();
 	
 	bool failed_beg(std::string raw) const;
-	std::string transform(std::string raw) const;
+	std::string transform(std::string raw, uint32_t rva) const;
 private:
 	bool init();
 	void release();
