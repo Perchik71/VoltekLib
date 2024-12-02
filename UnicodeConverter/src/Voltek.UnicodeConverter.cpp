@@ -11,7 +11,7 @@
 
 #include <algorithm>
 #ifdef _USE_UTF8CPPLIB
-#	include "utf8.h"
+#	include "..\..\depends\utfcpp\source\utf8.h"
 #endif
 
 namespace voltek
