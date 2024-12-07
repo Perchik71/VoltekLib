@@ -432,7 +432,7 @@ namespace voltek
 
 #ifdef _USE_UTF8CPPLIB
 		std::string utf8line;
-		utf8::utf16to8(src.begin(), src.end(), back_inserter(utf8line));
+		utf8::utf16to8(src.begin(), src.begin() + len, back_inserter(utf8line));
 		return utf8line.c_str();
 #else
 		return utf8encode(src);
