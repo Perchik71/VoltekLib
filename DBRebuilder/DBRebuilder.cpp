@@ -440,8 +440,24 @@ void action_base_transform(const char* fname_exe, const char* fname_database, co
     printf("Total signature [ success %u / fail %u ] (%u%%)\n", total_process, total_failed, ((total_failed * 100) / total_process));
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+    printf("Program for recognizing and searching signatures from the old version to the new one.\nAuthor: perchik71\n");
+
+    if (argc != 4)
+    {
+        printf(
+            "Invalid arguments for call\n"
+            "Example: VoltekLib.DBRebuilder.exe "
+            "\"CreationKit_se_1_6_1130.exe\" "
+            "\"CreationKitPlatformExtended_SSE_1_6_1130.database\" "
+            "\"CreationKit_se_1_6_1378_1.exe\"\n");
+        pause();
+        return 0;
+    }
+
+    action_base_transform(argv[1], argv[2], argv[3]);
+
     //action_rebase("CreationKit.exe", "CreationKitPlatformExtended_FO4_1_10_162.database", true);
     
     /*action_base_transform(
@@ -449,10 +465,11 @@ int main()
         "CreationKitPlatformExtended_FO4_1_10_943_1.database", 
         "CreationKit_f4_1_10_943_1.exe");*/
 
-    action_base_transform(
+   /* action_base_transform(
         "CreationKit_se_1_6_1130.exe",
         "CreationKitPlatformExtended_SSE_1_6_1130.database",
-        "CreationKit_se_1_6_1378_1.exe");
+        "CreationKit_se_1_6_1378_1.exe");*/
 
     pause();
+    return 0;
 }
