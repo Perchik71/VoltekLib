@@ -1,4 +1,4 @@
-﻿#include <shellapi.h>
+#include <shellapi.h>
 #include <Shlwapi.h>
 #include <strsafe.h>
 #include <Voltek.RelocationDatabase.h>
@@ -9,8 +9,7 @@
 
 #include "source_file.h"
 
-
-#include <Zydis/DecoderTypes.h>
+//#include <Zydis/DecoderTypes.h>
 
 namespace voltek
 {
@@ -455,14 +454,14 @@ void action_base_transform(const char* fname_exe, const char* fname_database, co
     printf("Total signature [ total %u / fail %u ] (failed %u%%)\n", total_process, total_failed, ((total_failed * 100) / total_process));
 }
 
-extern "C" int zydis_decoder_init();
-extern "C" void* zydis_create_instruction();
-extern "C" int zydis_release_instruction(void* instruction);
-extern "C" int zydis_init_instruction(void* instruction, void* raw);
-extern "C" int zydis_instruction_length(void* instruction);
-extern "C" int zydis_instruction_has_address(void* instruction);
-extern "C" int zydis_instruction_opcode(void* instruction);
-extern "C" unsigned __int64 zydis_instruction_attributes(void* instruction);
+//extern "C" int zydis_decoder_init();
+//extern "C" void* zydis_create_instruction();
+//extern "C" int zydis_release_instruction(void* instruction);
+//extern "C" int zydis_init_instruction(void* instruction, void* raw);
+//extern "C" int zydis_instruction_length(void* instruction);
+//extern "C" int zydis_instruction_has_address(void* instruction);
+//extern "C" int zydis_instruction_opcode(void* instruction);
+//extern "C" unsigned __int64 zydis_instruction_attributes(void* instruction);
 
 int main(int argc, char* argv[])
 {
@@ -483,67 +482,67 @@ int main(int argc, char* argv[])
     action_base_transform(argv[1], argv[2], argv[3]);
 
     //action_rebase("CreationKit.exe", "CreationKitPlatformExtended_FO4_1_10_162.database", true);
-    
+
     /*action_base_transform(
-        "CreationKit_f4_1_10_162.exe", 
-        "CreationKitPlatformExtended_FO4_1_10_943_1.database", 
+        "CreationKit_f4_1_10_162.exe",
+        "CreationKitPlatformExtended_FO4_1_10_943_1.database",
         "CreationKit_f4_1_10_943_1.exe");*/
 
-   /* action_base_transform(
-        "CreationKit_se_1_6_1130.exe",
-        "CreationKitPlatformExtended_SSE_1_6_1130.database",
-        "CreationKit_se_1_6_1378_1.exe");*/
+        /* action_base_transform(
+             "CreationKit_se_1_6_1130.exe",
+             "CreationKitPlatformExtended_SSE_1_6_1130.database",
+             "CreationKit_se_1_6_1378_1.exe");*/
 
-    //if (!zydis_decoder_init())
-    //{
-    //    auto _instruction = zydis_create_instruction();
-    //    if (_instruction)
-    //    {
-    //        //char ins_raw[] = "\xE8\xDA\xBC\xF3\xFF";
-    //        //char ins_raw[] = "\x75\xF0";
-    //        char ins_raw[] = "\xFF\x15\x18\x15\x80\x6B\x16\x48\x8D\x8E";
-    //        //char ins_raw[] = "\x66\x44\x89\x44\x24\x38";
-    //        //char ins_raw[] = "\xF7\x06\x00\x01\x00\x02";
-    //        //char ins_raw[] = "\xF7\x86\xBC\x00\x00\x00\x00\x01\x00\x02";
-    //        if (!zydis_init_instruction(_instruction, ins_raw))
-    //        {
-    //            auto ins = reinterpret_cast<ZydisDecodedInstruction*>(_instruction);
-    //           
-    //            printf("length: %u\n", ins->length);
-    //            printf("opcode: 0x%X\n", ins->opcode);
+             //if (!zydis_decoder_init())
+             //{
+             //    auto _instruction = zydis_create_instruction();
+             //    if (_instruction)
+             //    {
+             //        //char ins_raw[] = "\xE8\xDA\xBC\xF3\xFF";
+             //        //char ins_raw[] = "\x75\xF0";
+             //        char ins_raw[] = "\xFF\x15\x18\x15\x80\x6B\x16\x48\x8D\x8E";
+             //        //char ins_raw[] = "\x66\x44\x89\x44\x24\x38";
+             //        //char ins_raw[] = "\xF7\x06\x00\x01\x00\x02";
+             //        //char ins_raw[] = "\xF7\x86\xBC\x00\x00\x00\x00\x01\x00\x02";
+             //        if (!zydis_init_instruction(_instruction, ins_raw))
+             //        {
+             //            auto ins = reinterpret_cast<ZydisDecodedInstruction*>(_instruction);
+             //           
+             //            printf("length: %u\n", ins->length);
+             //            printf("opcode: 0x%X\n", ins->opcode);
 
-    //            size_t len = zydis_instruction_length(_instruction);
-    //            printf("has_addr: %u\n", zydis_instruction_has_address(_instruction));
-    //            printf("mnemonic: %u\n", ins->mnemonic);
-    //            printf("mnemonic_size: %u\n", (ZYAN_BITS_TO_REPRESENT(ins->mnemonic) + 7) / 8);
-    //            printf("raw.disp.offset: %u\n", ins->raw.disp.offset);
-    //            printf("raw.disp.size: %u\n", ins->raw.disp.size / 8);
-    //            printf("raw.disp.value: 0x%llX\n", ins->raw.disp.value);
+             //            size_t len = zydis_instruction_length(_instruction);
+             //            printf("has_addr: %u\n", zydis_instruction_has_address(_instruction));
+             //            printf("mnemonic: %u\n", ins->mnemonic);
+             //            printf("mnemonic_size: %u\n", (ZYAN_BITS_TO_REPRESENT(ins->mnemonic) + 7) / 8);
+             //            printf("raw.disp.offset: %u\n", ins->raw.disp.offset);
+             //            printf("raw.disp.size: %u\n", ins->raw.disp.size / 8);
+             //            printf("raw.disp.value: 0x%llX\n", ins->raw.disp.value);
 
-    //            for (int i = 0; i < 2; i++)
-    //            {
-    //                printf("raw.imm[%d].offset: %u\n", i, ins->raw.imm[i].offset);
-    //                printf("raw.imm[%d].size: %u\n", i, ins->raw.imm[i].size / 8);
-    //                printf("raw.imm[%d].value: 0x%llX\n", i, ins->raw.imm[i].value.s);
-    //            }
+             //            for (int i = 0; i < 2; i++)
+             //            {
+             //                printf("raw.imm[%d].offset: %u\n", i, ins->raw.imm[i].offset);
+             //                printf("raw.imm[%d].size: %u\n", i, ins->raw.imm[i].size / 8);
+             //                printf("raw.imm[%d].value: 0x%llX\n", i, ins->raw.imm[i].value.s);
+             //            }
 
-    //            printf("raw.rex.offset: %u\n", ins->raw.rex.offset);
+             //            printf("raw.rex.offset: %u\n", ins->raw.rex.offset);
 
-    //            printf("operand count: %u\n", ins->operand_count);
-    //            for (ZyanU8 i = 0; i < ins->operand_count; i++)
-    //            {
-    //                auto operand = ins->operands[i];
-    //                printf("operand type: %u\n", operand.type);
-    //                printf("operand size: %u\n", operand.size / 8);
-    //                if(operand.type == ZYDIS_OPERAND_TYPE_MEMORY)
-    //                    printf("operand mem value: 0x%llX\n", operand.mem.disp.value);
-    //                else if (operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE)
-    //                    printf("operand imm value: 0x%llX\n", operand.imm.value.s);
-    //            }
-    //        }
-    //        zydis_release_instruction(_instruction);
-    //    }
-    //}
+             //            printf("operand count: %u\n", ins->operand_count);
+             //            for (ZyanU8 i = 0; i < ins->operand_count; i++)
+             //            {
+             //                auto operand = ins->operands[i];
+             //                printf("operand type: %u\n", operand.type);
+             //                printf("operand size: %u\n", operand.size / 8);
+             //                if(operand.type == ZYDIS_OPERAND_TYPE_MEMORY)
+             //                    printf("operand mem value: 0x%llX\n", operand.mem.disp.value);
+             //                else if (operand.type == ZYDIS_OPERAND_TYPE_IMMEDIATE)
+             //                    printf("operand imm value: 0x%llX\n", operand.imm.value.s);
+             //            }
+             //        }
+             //        zydis_release_instruction(_instruction);
+             //    }
+             //}
 
     pause();
     return 0;
