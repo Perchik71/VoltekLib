@@ -11,6 +11,7 @@
     <ClCompile Include="source\vbase.cpp" />
     <ClCompile Include="source\vbits.cpp" />
     <ClCompile Include="source\vmapper.cpp" />
+    <ClCompile Include="iw\iw.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="source\vintrin.h" />
@@ -34,6 +35,7 @@
       <Filter>version</Filter>
     </ClInclude>
     <ClInclude Include="source\vstack.h" />
+    <ClInclude Include="iw\iw.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="version">
